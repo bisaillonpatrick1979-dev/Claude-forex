@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+
+/*
+ * Direction visuelle : terminal professionnel, pas tableau de bord SaaS.
+ * Thème sombre unique — une salle de marché se regarde des heures d'affilée.
+ *
+ * Le vert et le rouge sont réservés au P&L et aux vetos. Rien d'autre dans
+ * l'interface n'a le droit de les utiliser : c'est ce qui rend un chiffre
+ * négatif immédiatement lisible au milieu d'un écran dense.
+ *
+ * Pas de next/font : les polices système évitent une dépendance réseau au
+ * build et tout décalage de rendu au chargement.
+ */
+@theme {
+  --color-fond: #0a0d12;
+  --color-panneau: #11151c;
+  --color-panneau-clair: #161b24;
+  --color-bordure: #232a35;
+  --color-bordure-vive: #33404f;
+  --color-texte: #d6dde7;
+  --color-texte-attenue: #7b8798;
+  --color-accent: #4c9aff;
+  --color-hausse: #22c55e;
+  --color-baisse: #ef4444;
+  --color-alerte: #f59e0b;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-fond);
+  color: var(--color-texte);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tous les chiffres sont en chasse fixe et en chiffres tabulaires : les
+   colonnes de prix restent alignées quand les valeurs changent. */
+.chiffre {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-fond);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-bordure);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-bordure-vive);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
