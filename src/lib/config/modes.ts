@@ -18,6 +18,11 @@ export const DESCRIPTIONS_MODES: Readonly<Record<ModeOperation, DescriptionMode>
     libelle: 'Papier — validation',
     description: 'Chaque ordre attend votre approbation avant exécution simulée.',
   },
+  PAPIER_CONSEIL: {
+    code: 'PAPIER_CONSEIL',
+    libelle: 'Papier — conseil',
+    description: 'Les agents analysent et conseillent ; vous seul passez les ordres.',
+  },
   REEL_VALIDATION: {
     code: 'REEL_VALIDATION',
     libelle: 'Réel — validation',
