@@ -10,7 +10,7 @@ ne promet aucun rendement et n'affiche que des résultats mesurés.
 
 ## État
 
-Phases 0 (fondations) et 1 (couche de données de marché) livrées. Voir [NOTES.md](./NOTES.md)
+Phases 0 (fondations), 1 (couche de données de marché) et 2 (graphique) livrées. Voir [NOTES.md](./NOTES.md)
 pour l'avancement détaillé, les décisions d'architecture et les dettes assumées.
 
 Le mode réel est verrouillé par trois barrières indépendantes (constante TypeScript,
@@ -20,7 +20,7 @@ dépôt.
 ## Stack
 
 Next.js 15 (App Router) · TypeScript strict · Tailwind CSS v4 · Supabase (PostgreSQL,
-Realtime, RLS, pgvector) · Vitest · déploiement Vercel.
+Realtime, RLS, pgvector) · lightweight-charts v5 · Vitest · déploiement Vercel.
 
 ## Démarrer
 
@@ -47,7 +47,7 @@ fichiers.
 
 ```
 src/app/             routes (App Router) ; le groupe (firme) porte les pages authentifiées
-src/composants/      composants d'interface
+src/composants/      composants d'interface, dont le graphique en chandeliers
 src/lib/config/      drapeaux, modes, valeurs par défaut de risque, environnement
 src/lib/marche/      interface fournisseur, adaptateurs, routeur, quotas, cache
 src/lib/securite/    chiffrement des clés API, limitation de débit

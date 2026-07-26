@@ -49,12 +49,17 @@ export async function chargerSymbole(client: Client, code: string): Promise<Symb
   };
 }
 
-export async function listerSymboles(client: Client): Promise<
-  readonly { code: string; libelle: string; classeActif: ClasseActif }[]
-> {
+export interface SymboleListe {
+  readonly code: string;
+  readonly libelle: string;
+  readonly classeActif: ClasseActif;
+  readonly decimales: number;
+}
+
+export async function listerSymboles(client: Client): Promise<readonly SymboleListe[]> {
   const { data } = await client
     .from('symboles')
-    .select('code, libelle, classe_actif')
+    .select('code, libelle, classe_actif, decimales')
     .eq('actif', true)
     .order('classe_actif')
     .order('code');
@@ -63,5 +68,6 @@ export async function listerSymboles(client: Client): Promise<
     code: ligne.code,
     libelle: ligne.libelle,
     classeActif: ligne.classe_actif,
+    decimales: ligne.decimales,
   }));
 }
