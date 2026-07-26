@@ -70,12 +70,22 @@ export async function inscription(
     return { erreur: error.message };
   }
 
-  // Sans session, Supabase attend une confirmation par courriel. La firme
-  // (profil, portefeuille, 12 agents) est déjà créée par le trigger en base.
+  // GoTrue décide de renvoyer une session selon sa propre configuration,
+  // indépendamment du fait que l'adresse soit déjà confirmée en base par le
+  // trigger d'auto-confirmation. On tente donc une connexion immédiate : elle
+  // réussit dès que l'adresse est confirmée, et on évite un aller-retour par
+  // la boîte courriel qui n'apporte rien ici.
   if (!data.session) {
-    return {
-      info: 'Compte créé. Ouvre le lien de confirmation reçu par courriel, puis connecte-toi.',
-    };
+    const { error: erreurConnexion } = await supabase.auth.signInWithPassword({
+      email: analyse.data.courriel,
+      password: analyse.data.motDePasse,
+    });
+
+    if (erreurConnexion) {
+      return {
+        info: 'Compte créé. Ouvre le lien de confirmation reçu par courriel, puis connecte-toi.',
+      };
+    }
   }
 
   redirect('/salle-des-marches');

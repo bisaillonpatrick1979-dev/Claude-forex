@@ -420,10 +420,17 @@ Le scaffold installe Tailwind **v4**, configuré en CSS (`@theme` dans `globals.
 - **Pas de WebSocket.** La mise à jour en direct de la phase 2 se fera par sondage du cache,
   pas par flux temps réel. Finnhub en offre un sur son palier gratuit ; ça ne vaut le coût
   qu'une fois le graphique en place.
-- **La confirmation par courriel est active** sur le projet Supabase. À l'inscription, la
-  firme est créée immédiatement par le trigger, mais la session n'arrive qu'après le clic sur
-  le lien reçu. Pour développer sans cette étape : Supabase → Authentication → Sign In / Up →
-  désactiver « Confirm email ».
+- **Confirmation par courriel désactivée au niveau de la base**, pas du tableau de bord. Le
+  réglage « Confirm email » vit dans la configuration GoTrue, hors de portée d'une migration et
+  de l'outillage disponible ici. Un trigger `BEFORE INSERT` sur `auth.users` remplit donc
+  `email_confirmed_at`, et l'action d'inscription enchaîne sur une connexion immédiate — GoTrue
+  ne renvoie pas de session à l'inscription tant que *sa* configuration exige une confirmation,
+  même quand l'adresse est confirmée en base.
+
+  Contrepartie assumée : n'importe qui atteignant le déploiement peut créer un compte avec une
+  adresse qu'il ne possède pas. Les données restent isolées par RLS, mais chaque compte
+  consomme du quota Supabase. À revoir si l'application s'ouvre — Supabase permet de couper les
+  inscriptions, ou on peut restreindre à une liste d'adresses par un trigger similaire.
 
 ---
 
