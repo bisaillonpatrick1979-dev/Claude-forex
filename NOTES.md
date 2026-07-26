@@ -13,7 +13,8 @@ Tenu à jour à chaque phase.
 | 1 | Données de marché : interface, adaptateurs, routeur, quotas, cache, réglages | ✅ livrée |
 | 2 | Graphique lightweight-charts v5, indicateurs, mise à jour en direct | ✅ livrée |
 | 3 | Moteur d'exécution simulé + garde-fous de risque | ✅ livrée |
-| 4 | Agents et orchestration | à faire |
+| 4a | Gouvernance des agents : permissions, autonomie, file de validation | ✅ livrée |
+| 4b | Orchestrateur : cycles LLM, débat, mémoire, déclencheurs planifiés | à faire |
 | 5 | Salle des marchés en temps réel | à faire |
 | 6 | Backtest, mémoire pgvector, coûts | à faire |
 | 7 | Passerelle broker réel — **à discuter, rien de codé** | bloquée volontairement |
@@ -283,6 +284,126 @@ Heuristique assumée, remplaçable en phase 6.
 
 ---
 
+## Décisions d'architecture (phase 4a)
+
+### Deux barrières, jamais confondues
+
+`permissions_agents` répond à « cet agent-là a-t-il le droit d'agir, et faut-il un humain ? ».
+`parametres_risque` répond à « quelle taille le portefeuille supporte-t-il ? ». Les deux sont
+évaluées dans cet ordre, par deux fonctions pures distinctes (`evaluerPermission` puis
+`evaluerGardeFous`), et aucune ne connaît le domaine de l'autre.
+
+La tentation était de tout mettre dans les garde-fous, avec un champ « agent autorisé » de
+plus. Ç'aurait mélangé deux questions dont les réponses changent à des rythmes différents :
+les droits se règlent une fois et se relisent souvent, les plafonds de risque se recalculent à
+chaque ordre. Séparées, chacune se teste isolément — 28 tests pour les permissions, sans
+jamais construire un portefeuille.
+
+Corollaire : un agent autonome reste soumis aux garde-fous, et un agent bridé par les
+garde-fous n'obtient pas l'autonomie pour autant.
+
+### Le plus strict des deux gagne, toujours
+
+`fusionnerRisque` prend le minimum entre le plafond de risque du portefeuille et celui de
+l'agent. Une permission ne peut donc jamais élargir une limite, seulement la resserrer.
+
+C'est indispensable, pas cosmétique : la policy RLS autorise le propriétaire à écrire
+`permissions_agents` depuis le navigateur. Sans cette règle, il aurait suffi d'un `risque max
+par trade` d'agent à 10 % pour contourner un plafond de portefeuille à 1 % — la table des
+permissions serait devenue la porte de sortie des garde-fous.
+
+### Le niveau d'autonomie est fermé par défaut
+
+À la création de la firme, personne n'est autonome : les dix rôles d'analyse et de recherche
+naissent `OBSERVATEUR`, le trader et le gestionnaire de portefeuille naissent `PROPOSITION`.
+Ouvrir un droit est un geste explicite de l'utilisateur, jamais un défaut hérité.
+
+Les permissions naissent d'un trigger sur l'insertion d'un agent, pas dans
+`initialiser_profil()` : un agent créé plus tard, par l'UI ou par une migration, obtient ses
+droits par défaut sans qu'on ait à y penser. Aucun agent ne peut exister sans ligne de
+permission — et si une ligne manquait malgré tout, `PERMISSION_FERMEE` s'applique côté
+serveur : pas de ligne, pas de droits.
+
+### L'autonomie est refusée aux rôles non exécutants, en base
+
+Seuls `TRADER` et `GESTIONNAIRE_PORTEFEUILLE` peuvent passer `AUTONOME`. Un trigger
+PostgreSQL le refuse pour les autres rôles, et l'UI grise le bouton avec l'explication.
+
+Le doublon est volontaire : l'UI est ergonomique, le trigger est la garantie. Comme pour le
+mode réel, un contrôle applicatif seul serait contournable — la table est écrite depuis le
+navigateur.
+
+Et si une ligne `AUTONOME` échappait quand même au trigger, `evaluerPermission` la rétrograde
+en validation humaine au lieu d'exécuter. Trois niveaux de refus pour la même règle.
+
+### Le mode du profil prime sur le niveau de l'agent
+
+`PAPIER_VALIDATION` impose la validation à tous, même aux agents autonomes.
+`PAPIER_CONSEIL` va plus loin : il refuse la soumission au lieu de la mettre en file, parce
+qu'une proposition en attente laisserait croire qu'elle est exécutable alors que le mode dit
+l'inverse — les agents conseillent, l'humain trade.
+
+### La validation lève l'exigence d'un humain, pas les droits
+
+Approuver une proposition rejoue les deux barrières. Un agent suspendu ou désactivé
+entre-temps reste bloqué : il faut le réactiver explicitement. Et surtout, le contrôle de
+risque est refait sur le prix du moment — approuver quinze minutes plus tard une taille
+calculée sur des prix périmés reviendrait à exécuter une décision qui n'a plus de sens.
+
+C'est aussi pour ça qu'une proposition porte une date d'expiration (30 minutes par défaut,
+réglable par agent) et que la file archive les périmées avant de s'afficher.
+
+### Chaque décision laisse une ligne, y compris les refus
+
+Une proposition refusée par les permissions est écrite avec le statut `REFUSEE_PERMISSION`,
+distinct de `REJETEE_RISQUE`. Sans cette distinction, un agent recalé faute de droits
+apparaîtrait comme « rejeté par le risque », ce qui est faux et rend l'historique inutilisable
+pour comprendre pourquoi un agent n'a rien fait de la journée.
+
+### Le quota quotidien ne bloque jamais une fermeture
+
+`trades_max_par_jour` ne compte que les ouvertures. Interdire une fermeture parce que le quota
+est atteint laisserait une position ouverte sans personne pour la refermer : la limite
+protégerait du sur-trading en créant un risque plus grand.
+
+Même logique pour la confiance minimale, qui ne s'applique qu'aux ouvertures.
+
+### Le banc d'essai emprunte le vrai chemin
+
+L'orchestrateur n'existe pas encore, mais `soumettreProposition` est complet. La page Agents
+l'appelle telle quelle : mêmes barrières, mêmes écritures, mêmes traces. Ce qui est testé à la
+main aujourd'hui est exactement ce qui tournera en automatique en phase 4b — l'orchestrateur
+n'aura pas de chemin d'exécution à lui.
+
+---
+
+## Dérive entre la base déployée et le dépôt (juillet 2026)
+
+Six migrations avaient été appliquées sur le projet Supabase sans être versionnées ici :
+`mandats_accentues`, `mode_conseil`, `strategies_et_recherche_vectorielle`,
+`amorcage_strategies`, `methode_embedding`, `recherche_vectorielle_cote_serveur`. Le dépôt ne
+pouvait donc plus reconstruire la base déployée — et les types générés décrivaient un schéma
+que les migrations du dépôt n'auraient pas produit.
+
+Cinq d'entre elles ont été rapatriées telles qu'appliquées, sous les noms
+`20260726150000` à `20260726150400`. La sixième, `mandats_accentues`, n'a rien apporté :
+c'est la version accentuée de `initialiser_profil()`, déjà présente dans
+`20260726120600_amorcage.sql`.
+
+Ce que ces migrations ajoutent, et qui n'a **pas** de code applicatif dans ce dépôt :
+
+- **`PAPIER_CONSEIL`**, troisième mode d'opération. Intégré côté application par cette phase
+  (sélecteur de mode, refus de soumission dans `evaluerPermission`).
+- **Table `strategies`** et fonctions `rechercher_strategies` / `rechercher_lecons` : six
+  playbooks amorcés, une colonne `agents.famille_strategie`, deux méthodes d'embedding
+  (`openai-3-small` et `lexical-1536`). Rien ne les lit encore côté Next.js : c'est de la
+  matière pour l'orchestrateur de la phase 4b, pas une fonctionnalité livrée.
+
+Leçon retenue : toute migration appliquée par un outil externe doit être rapatriée dans
+`supabase/migrations/` dans la foulée, sans quoi le dépôt cesse d'être la source de vérité.
+
+---
+
 ## Pièges rencontrés
 
 ### Le journal d'audit immuable bloquait la suppression d'un compte
@@ -401,7 +522,17 @@ Le scaffold installe Tailwind **v4**, configuré en CSS (`@theme` dans `globals.
   que le flux n'existe pas (Finnhub le fournit — phase 4). Le contrôle est en place, sa source
   ne l'est pas encore : c'est signalé ici pour ne pas croire la protection active.
 - **`avancerMarche` est déclenché à la main** depuis l'interface. Le passage en cron Vercel
-  viendra avec les déclencheurs planifiés de la phase 4.
+  viendra avec les déclencheurs planifiés de la phase 4b.
+- **Les propositions expirent à l'affichage de la file**, pas par une tâche planifiée. Tant
+  qu'il n'y a pas de cron, c'est suffisant : le seul endroit d'où une proposition périmée
+  pourrait être approuvée est justement cet écran, et l'approbation revérifie l'échéance.
+  À revoir en phase 4b, où des propositions naîtront sans que personne ne regarde.
+- **Le quota de trades quotidien compte les propositions acceptées**, pas les ordres remplis.
+  Un ordre annulé avant remplissage consomme donc une décision de l'agent. C'est voulu — on
+  plafonne les décisions, pas les exécutions — mais ça se voit dans les chiffres.
+- **Aucun agent n'agit encore de lui-même.** Les permissions décrivent ce qui *sera* autorisé ;
+  seul le banc d'essai emprunte le chemin aujourd'hui. Un agent en « autonome » n'exécutera
+  rien tant que l'orchestrateur de la phase 4b n'existe pas.
 - **Index IVFFlat sur `lecons.embedding`** avec `lists = 100` : sous-optimal tant qu'il y a
   peu de leçons, mais bien moins gourmand en mémoire que HNSW sur le palier gratuit. À
   revoir si le volume dépasse quelques milliers de lignes.
@@ -509,6 +640,44 @@ coup — rien de cet échafaudage n'est dans le dépôt.
 Non vérifié : le passage d'ordres depuis l'interface déployée, Supabase étant injoignable
 depuis ce conteneur. La logique comptable est en revanche couverte de bout en bout par le
 scénario multi-bougies, qui traverse exactement le même code que l'interface.
+
+---
+
+## Vérifications faites en fin de phase 4a
+
+Sur la logique pure, par les tests (28 cas sur les permissions, 146 au total) :
+
+- portefeuille gelé, agent désactivé, agent suspendu — et reprise automatique à l'échéance de
+  la suspension ;
+- observateur refusé ; droits d'ouverture, de fermeture et de déplacement de stop dissociés ;
+- périmètre par classe d'actifs et par symbole, listes vides valant « aucune restriction » ;
+- quota quotidien qui bloque une ouverture mais jamais une fermeture ;
+- confiance minimale, y compris le cas d'une proposition sans confiance annoncée ;
+- taille ramenée au plafond de l'agent, et refus quand le résidu tombe sous 0,01 lot ;
+- plafond de taille appliqué **avant** le seuil de validation : un ordre ramené sous le seuil
+  redevient autonome au lieu d'attendre une validation pour une taille qui ne sera pas prise ;
+- rétrogradation en validation d'un rôle non exécutant marqué autonome ;
+- mode `PAPIER_VALIDATION` qui impose la validation, mode `PAPIER_CONSEIL` qui refuse la
+  soumission ;
+- fusion des plafonds de risque dans les trois cas : agent plus strict, agent plus permissif,
+  agent sans plafond propre.
+
+Sur la base déployée, en SQL :
+
+- passer un analyste en `AUTONOME` est refusé par le trigger, et son niveau reste
+  `OBSERVATEUR` ;
+- les douze lignes de permissions créées à l'amorçage ont produit douze entrées
+  `PERMISSION_AGENT_CREEE` dans le journal d'audit ;
+- une modification de permission produit une entrée `PERMISSION_AGENT_MODIFIEE` avec le niveau
+  avant et après (vérifié en portant la validité du trader à 45 minutes puis en la ramenant à
+  30) ;
+- une modification sans changement réel n'écrit rien, grâce à la clause
+  `when (old.* is distinct from new.*)`.
+
+Non vérifié : le parcours complet depuis le navigateur (soumission par le banc d'essai,
+apparition dans la file, approbation) — il exige une session authentifiée que ce conteneur ne
+peut pas ouvrir. Le chemin serveur est en revanche le même que celui de l'ordre manuel, déjà
+éprouvé en phase 3, et les deux barrières qu'il ajoute sont couvertes par les tests.
 
 ---
 
