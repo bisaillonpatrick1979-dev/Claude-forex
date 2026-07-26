@@ -10,8 +10,8 @@ ne promet aucun rendement et n'affiche que des résultats mesurés.
 
 ## État
 
-Phase 0 (fondations) livrée. Voir [NOTES.md](./NOTES.md) pour l'avancement détaillé, les
-décisions d'architecture et les dettes assumées.
+Phases 0 (fondations) et 1 (couche de données de marché) livrées. Voir [NOTES.md](./NOTES.md)
+pour l'avancement détaillé, les décisions d'architecture et les dettes assumées.
 
 Le mode réel est verrouillé par trois barrières indépendantes (constante TypeScript,
 variable d'environnement, triggers PostgreSQL). Aucun code d'ordre réel n'existe dans le
@@ -49,6 +49,8 @@ fichiers.
 src/app/             routes (App Router) ; le groupe (firme) porte les pages authentifiées
 src/composants/      composants d'interface
 src/lib/config/      drapeaux, modes, valeurs par défaut de risque, environnement
+src/lib/marche/      interface fournisseur, adaptateurs, routeur, quotas, cache
+src/lib/securite/    chiffrement des clés API, limitation de débit
 src/lib/supabase/    clients navigateur / serveur / admin / middleware
 src/types/           types générés depuis le schéma Supabase
 supabase/migrations/ schéma, RLS, amorçage

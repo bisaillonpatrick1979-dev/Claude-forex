@@ -10,7 +10,7 @@ Tenu à jour à chaque phase.
 | Phase | Objet | État |
 | --- | --- | --- |
 | 0 | Fondations : Next.js 15, Supabase, schéma, RLS, auth, navigation, thème | ✅ livrée |
-| 1 | Données de marché : `MarketDataProvider`, adaptateurs, routeur, cache | à faire |
+| 1 | Données de marché : interface, adaptateurs, routeur, quotas, cache, réglages | ✅ livrée |
 | 2 | Graphique lightweight-charts v5 | à faire |
 | 3 | Moteur d'exécution simulé + garde-fous de risque | à faire |
 | 4 | Agents et orchestration | à faire |
@@ -93,6 +93,79 @@ chiffre négatif lisible d'un coup d'œil dans un écran dense.
 
 ---
 
+## Décisions d'architecture (phase 1)
+
+### La cascade ne saute jamais une étape en silence
+
+Ordre imposé par `lib/marche/routeur.ts` : cache frais → fournisseurs par priorité →
+cache périmé **marqué comme tel** → erreur explicite listant chaque tentative et sa raison.
+
+`ResultatMarche` porte toujours `origine`, `fournisseur`, `perime`, `retarde` et la liste
+des `incidents`. L'appelant ne peut pas confondre une bougie fraîche de Twelve Data avec
+une bougie de trois heures ressortie du cache. C'est ce qui permettra aux agents (phase 4)
+de refuser de trader sur des données périmées.
+
+### Un fournisseur est écarté avant tout appel réseau
+
+Six conditions, vérifiées dans cet ordre, sans consommer un seul appel : adaptateur livré,
+priorité définie pour la classe d'actifs, correspondance de symbole en base, classe
+couverte, intervalle publié, quota non épuisé, clé présente si requise.
+
+Cas concret couvert par un test : Yahoo ne publie pas d'intervalle 4 heures. Demander du H4
+l'écarte avec l'incident « Intervalle H4 non publié » au lieu d'émettre une requête vouée à
+échouer.
+
+### Aucun adaptateur ne devine un symbole
+
+La table `correspondances_symboles` est la seule autorité. Deviner « EURUSD » → « EUR/USD »
+marche pour le Forex et casse immédiatement sur les indices : NAS100 vaut `^NDX` chez Yahoo
+et `NDX` chez Twelve Data. Sans correspondance, le fournisseur est déclaré incapable.
+
+### Le mock est déterministe, et c'est une contrainte, pas un détail
+
+La série n'est pas une marche aléatoire — qui dépendrait du point de départ, donc de la
+fenêtre demandée. C'est un bruit de valeur lissé évalué à l'**index absolu** de la bougie.
+Conséquence testée : demander 10 bougies ou 200 donne exactement les mêmes valeurs sur la
+plage commune. Sans ça, le cache se contredirait et un backtest ne serait pas reproductible.
+
+### Deux compteurs distincts, pour deux problèmes distincts
+
+- `lib/marche/quotas.ts` : compteur **persisté en base**, par fournisseur et par profil,
+  aligné sur des bornes naturelles (minute pleine, minuit UTC, premier du mois) — c'est ainsi
+  que les fournisseurs comptent. C'est le vrai garde-fou contre l'épuisement d'un palier
+  gratuit.
+- `lib/securite/limitation-debit.ts` : limitation de débit **en mémoire** sur les Route
+  Handlers. Protège d'une boucle de rendu accidentelle, pas d'un attaquant. Voir les dettes.
+
+Le compteur de quota n'est pas atomique : deux appels simultanés peuvent n'en compter qu'un.
+Accepté — il sert à éviter le mur, pas à facturer.
+
+### Chiffrement des clés API
+
+AES-256-GCM, clé maîtresse dans `CLE_CHIFFREMENT` (32 octets base64), jamais en base :
+compromettre la base ne suffit pas à lire les clés. GCM est authentifié, donc une valeur
+altérée est **rejetée** au lieu de produire une clé silencieusement fausse — testé.
+
+Format stocké : `v1.<iv>.<tag>.<chiffré>`, le préfixe de version prépare une rotation
+d'algorithme sans avoir à deviner.
+
+### Un écran de diagnostic plutôt qu'une 500
+
+Sans variables Supabase, l'application affichait une erreur 500 opaque sur toutes les pages.
+Le middleware laisse maintenant passer quand la configuration manque, et les points d'entrée
+rendent `ConfigurationManquante`, qui nomme les variables absentes et rappelle que les
+`NEXT_PUBLIC_*` sont intégrées au build (un redéploiement est nécessaire, pas un simple
+redémarrage).
+
+### La sonde de Réglages → Fournisseurs
+
+Le graphique n'arrive qu'en phase 2. Sans un écran capable de déclencher une récupération et
+d'afficher brut le fournisseur retenu, l'origine, la fraîcheur et chaque tentative échouée,
+le critère d'acceptation de la phase 1 serait invérifiable. La sonde n'est pas un gadget de
+démonstration : c'est l'instrument de contrôle de la couche de données.
+
+---
+
 ## Pièges rencontrés
 
 ### Le journal d'audit immuable bloquait la suppression d'un compte
@@ -111,6 +184,35 @@ phase 0 sont dans le journal pour toujours (`profil_id` d'un compte supprimé). 
 invisibles pour tout utilisateur réel, puisque la policy filtre sur `auth.uid()`. Les purger
 aurait voulu dire désactiver le trigger d'immuabilité, ce qui aurait vidé la garantie de son
 sens.
+
+### Les semaines commençaient un jeudi
+
+`floor(instant / 604800) * 604800` aligne les bougies hebdomadaires sur… le jeudi, parce que
+le 1er janvier 1970 était un jeudi. Toutes les bougies W1 auraient été décalées de trois
+jours, silencieusement. Corrigé par un décalage de 3 jours (le premier lundi de l'époque est
+le 5 janvier 1970), et verrouillé par un test qui vérifie que la borne tombe bien un lundi.
+
+Trouvé par le test, pas à la relecture — c'est exactement le genre d'erreur qu'on ne voit
+jamais dans un graphique.
+
+### Twelve Data renvoie ses erreurs en HTTP 200
+
+Un `{"status":"error","code":429}` arrive avec un code HTTP 200. Se fier au code HTTP seul
+aurait produit une exception de parsing plus loin, au lieu d'un basculement propre sur le
+fournisseur suivant. L'adaptateur inspecte donc systématiquement `status` dans le corps.
+
+Autre piège du même adaptateur : `datetime` est rendu dans le fuseau de la place par défaut.
+On force `timezone=UTC` — sinon la normalisation est fausse d'un décalage horaire, ce qui ne
+se voit pas non plus à l'œil nu.
+
+### Yahoo exige un User-Agent de navigateur
+
+Sans en-tête `User-Agent` ressemblant à un navigateur, les endpoints répondent 403. Ils
+raisonnent aussi en **plage** (`range=5d`) et non en nombre de bougies : l'adaptateur choisit
+le plus petit palier couvrant la demande, puis tronque.
+
+Les trous (`null`) des périodes sans échange sont **sautés**, jamais comblés : une bougie
+inventée est pire qu'une bougie absente.
 
 ### La documentation Supabase parle de `proxy.ts`, pas de `middleware.ts`
 
@@ -147,6 +249,19 @@ Le scaffold installe Tailwind **v4**, configuré en CSS (`@theme` dans `globals.
   revoir si le volume dépasse quelques milliers de lignes.
 - **Dimension d'embedding figée à 1536** (compatible `text-embedding-3-small`). Changer de
   modèle d'embedding imposera une migration de colonne et un recalcul complet.
+- **Limitation de débit en mémoire, par instance.** Sur Vercel, chaque instance serverless a
+  son propre compteur : le plafond réel est « 60/min par instance », pas « 60/min au total ».
+  C'est une protection contre une boucle d'appels accidentelle, pas contre un attaquant
+  distribué. Un vrai compteur partagé demande Redis (Upstash, palier payant) ou une écriture
+  Postgres par requête (quota de la base gratuite). À revoir si le projet s'ouvre à d'autres
+  utilisateurs.
+- **Adaptateurs Finnhub, Alpha Vantage et Alpaca non livrés.** Ils existent en base et dans
+  l'UI des Réglages, marqués « non livré », et le routeur les ignore explicitement plutôt que
+  de faire comme s'ils fonctionnaient. Livrables en phase 1bis si le besoin se confirme
+  (Finnhub surtout, pour les news de l'analyste sentiment en phase 4).
+- **Pas de WebSocket.** La mise à jour en direct de la phase 2 se fera par sondage du cache,
+  pas par flux temps réel. Finnhub en offre un sur son palier gratuit ; ça ne vaut le coût
+  qu'une fois le graphique en place.
 - **La confirmation par courriel est active** sur le projet Supabase. À l'inscription, la
   firme est créée immédiatement par le trigger, mais la session n'arrive qu'après le clic sur
   le lien reçu. Pour développer sans cette étape : Supabase → Authentication → Sign In / Up →
@@ -167,6 +282,26 @@ Exécutées directement sur la base, avec un compte jetable ensuite supprimé :
   d'audit conservé, référentiel des symboles intact.
 
 `npm run build` ✅ · `npm test` (9 tests) ✅ · `npx eslint .` ✅ · `npx tsc --noEmit` ✅
+
+## Vérifications faites en fin de phase 1
+
+- 47 tests au total, dont la cascade complète du routeur sur un faux client Supabase :
+  cache frais servi sans appel réseau, quota épuisé écarté sans appel, clé absente écartée
+  sans appel, intervalle non publié écarté, symbole sans correspondance écarté, erreur 429
+  d'un fournisseur prioritaire qui bascule sur le suivant, cache périmé servi et marqué,
+  erreur explicite quand il ne reste rien ;
+- déterminisme du mock vérifié sur trois axes (fenêtre, moment de l'appel, symbole) ;
+- alignement des bougies, y compris le cas W1 ;
+- chiffrement : aller-retour, IV aléatoire, rejet d'une valeur altérée, rejet d'un format
+  inconnu ;
+- serveur lancé : `/connexion` répond 200, `/salle-des-marches` redirige en 307 vers
+  `/connexion`, `/api/marche/chandeliers` répond 401 sans session.
+
+**Non vérifié depuis cet environnement** : les appels réels à Yahoo et Twelve Data. Le
+conteneur de développement n'autorise les sorties HTTPS que vers une liste blanche
+(npm, Supabase…), et ces deux domaines en sont absents — `CONNECT tunnel failed, 403`. Le
+chemin réel se vérifie depuis un `npm run dev` local ou depuis le déploiement, via la sonde
+de Réglages → Fournisseurs.
 
 ---
 
