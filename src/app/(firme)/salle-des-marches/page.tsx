@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation';
 
+import { ZoneGraphique } from '@/composants/graphique/zone-graphique';
 import { EtatVide, Panneau } from '@/composants/ui/panneau';
 import { couleurPnl, formaterMonnaie, formaterPourcentage, versNombre } from '@/lib/format';
+import { listerSymboles } from '@/lib/marche/symboles';
 import { clientServeur } from '@/lib/supabase/serveur';
 
 export const metadata = { title: 'Salle des marchés — Trading Floor IA' };
@@ -20,12 +22,15 @@ export default async function PageSalleDesMarches() {
   const profilId = jetons?.claims?.sub;
   if (typeof profilId !== 'string') redirect('/connexion');
 
-  const { data: portefeuille } = await supabase
-    .from('portefeuilles')
-    .select('nom, devise, capital_initial, solde, equite, marge_utilisee, sommet_equite, gele, raison_gel')
-    .eq('profil_id', profilId)
-    .limit(1)
-    .maybeSingle();
+  const [{ data: portefeuille }, symboles] = await Promise.all([
+    supabase
+      .from('portefeuilles')
+      .select('nom, devise, capital_initial, solde, equite, marge_utilisee, sommet_equite, gele, raison_gel')
+      .eq('profil_id', profilId)
+      .limit(1)
+      .maybeSingle(),
+    listerSymboles(supabase),
+  ]);
 
   const equite = versNombre(portefeuille?.equite);
   const capitalInitial = versNombre(portefeuille?.capital_initial);
@@ -80,12 +85,9 @@ export default async function PageSalleDesMarches() {
       </div>
 
       {/* Zone centrale — le graphique */}
-      <Panneau titre="Graphique" className="min-h-80 xl:min-h-0">
-        <EtatVide
-          message="Chandeliers, volume et marqueurs de décision."
-          phase="lightweight-charts — phase 2"
-        />
-      </Panneau>
+      <section className="flex min-h-96 flex-col overflow-hidden rounded-lg border border-bordure bg-panneau xl:min-h-0">
+        <ZoneGraphique symboles={symboles} />
+      </section>
 
       {/* Zone droite — le fil des spécialistes */}
       <Panneau titre="Fil des spécialistes" className="min-h-80 xl:min-h-0">
