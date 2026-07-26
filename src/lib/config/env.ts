@@ -25,8 +25,15 @@ let cachePublic: EnvPublic | null = null;
 let cacheServeur: EnvServeur | null = null;
 
 function echouer(erreur: z.ZodError): never {
-  // On n'imprime que les noms de variables : jamais leur valeur.
-  const details = erreur.issues.map((probleme) => probleme.message).join(' | ');
+  // Le nom de la variable vient du chemin de l'erreur, pas du message : Zod
+  // rend « Invalid input » pour plusieurs validateurs, ce qui produisait un
+  // journal de production strictement inutilisable — « Invalid input | Invalid
+  // input » sans dire laquelle des deux variables manquait.
+  //
+  // On n'imprime jamais la valeur, seulement le nom.
+  const details = erreur.issues
+    .map((probleme) => `${probleme.path.join('.') || 'variable inconnue'} (${probleme.message})`)
+    .join(' | ');
   throw new Error(`Configuration d'environnement invalide — ${details}`);
 }
 
