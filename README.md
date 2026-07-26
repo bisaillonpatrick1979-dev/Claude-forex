@@ -10,13 +10,35 @@ ne promet aucun rendement et n'affiche que des résultats mesurés.
 
 ## État
 
-Phases 0 (fondations), 1 (données de marché), 2 (graphique) et 3 (moteur d'exécution
-et garde-fous de risque) livrées. Voir [NOTES.md](./NOTES.md)
-pour l'avancement détaillé, les décisions d'architecture et les dettes assumées.
+Phases 0 (fondations), 1 (données de marché), 2 (graphique), 3 (moteur d'exécution
+et garde-fous de risque) et 4a (gouvernance des agents) livrées. Voir
+[NOTES.md](./NOTES.md) pour l'avancement détaillé, les décisions d'architecture et les dettes
+assumées.
 
 Le mode réel est verrouillé par trois barrières indépendantes (constante TypeScript,
 variable d'environnement, triggers PostgreSQL). Aucun code d'ordre réel n'existe dans le
 dépôt.
+
+## Qui a le droit de trader
+
+Chaque agent porte un niveau d'autonomie, réglable dans **Agents** :
+
+| Niveau | Ce que l'agent peut faire |
+| --- | --- |
+| Observateur | analyse et débat, aucune écriture sur le portefeuille |
+| Proposition | propose des ordres ; rien ne part sans validation humaine |
+| Autonome | fait exécuter ses ordres seul, dans ses limites |
+
+L'autonomie n'est ouverte qu'au trader et au gestionnaire de portefeuille, et un trigger
+PostgreSQL la refuse aux autres rôles. À cela s'ajoutent, par agent : droits d'ouverture, de
+fermeture et de déplacement de stop, taille maximale, risque maximal par trade, nombre de
+trades par jour, périmètre d'instruments, confiance minimale exigée, et un seuil de taille
+au-delà duquel même un agent autonome redemande une validation.
+
+Trois garanties valent en permanence : les plafonds du portefeuille s'appliquent toujours (la
+limite d'un agent ne peut que resserrer, jamais élargir), le mode d'opération prime sur les
+niveaux individuels, et le kill switch coupe tout le monde. Les ordres en attente se traitent
+dans **Validation**.
 
 ## Stack
 
@@ -49,6 +71,7 @@ fichiers.
 ```
 src/app/             routes (App Router) ; le groupe (firme) porte les pages authentifiées
 src/composants/      composants d'interface, dont le graphique en chandeliers
+src/lib/agents/      niveaux d'autonomie, permissions, lecture serveur des agents
 src/lib/config/      drapeaux, modes, valeurs par défaut de risque, environnement
 src/lib/execution/   moteur simulé, coûts, marge, séances, persistance
 src/lib/risque/      garde-fous et estimation de corrélation
