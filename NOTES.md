@@ -11,7 +11,7 @@ Tenu à jour à chaque phase.
 | --- | --- | --- |
 | 0 | Fondations : Next.js 15, Supabase, schéma, RLS, auth, navigation, thème | ✅ livrée |
 | 1 | Données de marché : interface, adaptateurs, routeur, quotas, cache, réglages | ✅ livrée |
-| 2 | Graphique lightweight-charts v5 | à faire |
+| 2 | Graphique lightweight-charts v5, indicateurs, mise à jour en direct | ✅ livrée |
 | 3 | Moteur d'exécution simulé + garde-fous de risque | à faire |
 | 4 | Agents et orchestration | à faire |
 | 5 | Salle des marchés en temps réel | à faire |
@@ -166,6 +166,58 @@ démonstration : c'est l'instrument de contrôle de la couche de données.
 
 ---
 
+## Décisions d'architecture (phase 2)
+
+### L'anti-clignotement est une contrainte de conception, pas un réglage
+
+Le graphique n'est créé **qu'une fois**. Les données arrivent ensuite par
+`series.update()` sur les bougies de queue — celles dont l'horodatage est au moins égal à
+celui de la dernière bougie appliquée, c'est-à-dire la bougie en formation et les nouvelles.
+`setData()` n'est appelé qu'au premier chargement et au changement d'instrument, et
+`fitContent()` uniquement dans ce cas.
+
+Corollaire côté données : le hook conserve l'état précédent pendant un rechargement. Vider
+la série puis la remplir produirait exactement le clignotement qu'on veut éviter. Seul un
+changement d'instrument vide la série — garder les bougies du symbole précédent afficherait
+des prix qui n'existent pas sur le nouveau.
+
+### Le sondage plutôt qu'un WebSocket
+
+La cadence est calée sur le TTL du cache serveur (M1 : 20 s, H1 : 2 min, D1 : 10 min) :
+sonder plus vite ne rapporterait rien de neuf et consommerait du quota fournisseur. Le
+sondage s'arrête quand l'onglet passe en arrière-plan.
+
+Un WebSocket (Finnhub en propose un sur son palier gratuit) n'a d'intérêt qu'une fois le
+moteur d'exécution en place, quand la latence commencera à compter.
+
+### Une seule implémentation des indicateurs
+
+`lib/marche/indicateurs.ts` sert au graphique **et** au snapshot passé à l'analyste
+technique en phase 4. L'agent verra donc exactement les valeurs que j'ai à l'écran — sans
+ça, il pourrait « citer le RSI » avec un chiffre que je ne retrouve nulle part.
+
+Règle commune à tous : la sortie a la longueur de l'entrée, et les positions non encore
+définies valent `null`, jamais 0. Un RSI à 0 sur ses treize premières bougies se lirait
+comme une survente extrême.
+
+L'EMA est amorcée par une moyenne simple sur la première fenêtre, convention des plateformes
+de trading : amorcer sur la première valeur seule donnerait une courbe qui ne correspond à
+aucun graphique de référence.
+
+### Marqueurs ancrés à la bougie, jamais au prix
+
+`MarqueurDecision` n'accepte que les positions `aboveBar` / `belowBar` / `inBar`. Un stop ou
+une cible se représente par une ligne de prix, pas par un marqueur ancré à un prix qui se
+perdrait au dézoom. Le graphique sait déjà les afficher avec l'extrait de raisonnement au
+survol ; la phase 5 n'aura qu'à les alimenter.
+
+### Un seul identifiant en anglais dans tout le projet
+
+`useChandeliers`. React impose le préfixe `use` pour reconnaître un hook, et son linter
+refuse tout autre nom — la convention du framework l'emporte sur celle du projet.
+
+---
+
 ## Pièges rencontrés
 
 ### Le journal d'audit immuable bloquait la suppression d'un compte
@@ -184,6 +236,24 @@ phase 0 sont dans le journal pour toujours (`profil_id` d'un compte supprimé). 
 invisibles pour tout utilisateur réel, puisque la policy filtre sur `auth.uid()`. Les purger
 aurait voulu dire désactiver le trigger d'immuabilité, ce qui aurait vidé la garantie de son
 sens.
+
+### L'axe du RSI montait à 120
+
+Fixer `autoscaleInfoProvider` sur 0–100 ne suffit pas : l'échelle de prix applique ses
+propres marges (20 % en haut, 10 % en bas), et l'axe affichait 0 à 120. Les repères 30 et 70
+se retrouvaient visuellement décalés vers le bas, ce qui fausse la lecture d'un indicateur
+dont tout l'intérêt est la position relative à ces seuils. Corrigé par
+`priceScale().applyOptions({ scaleMargins: … })`.
+
+Repéré sur une capture d'écran, pas par un test — certains défauts ne se voient qu'à l'œil.
+
+### `addCandlestickSeries()` n'existe plus en v5
+
+L'API v5 est `chart.addSeries(CandlestickSeries, options, paneIndex)`, avec les définitions
+de séries importées comme valeurs (`CandlestickSeries`, `HistogramSeries`, `LineSeries`).
+Les marqueurs passent par `createSeriesMarkers(series, markers)` et non plus par
+`series.setMarkers()`. Vérifié dans les typages livrés avec la bibliothèque (`typings.d.ts`
+de lightweight-charts 5.2.0), pas de mémoire.
 
 ### Les semaines commençaient un jeudi
 
@@ -298,10 +368,29 @@ Exécutées directement sur la base, avec un compte jetable ensuite supprimé :
   `/connexion`, `/api/marche/chandeliers` répond 401 sans session.
 
 **Non vérifié depuis cet environnement** : les appels réels à Yahoo et Twelve Data. Le
-conteneur de développement n'autorise les sorties HTTPS que vers une liste blanche
-(npm, Supabase…), et ces deux domaines en sont absents — `CONNECT tunnel failed, 403`. Le
-chemin réel se vérifie depuis un `npm run dev` local ou depuis le déploiement, via la sonde
-de Réglages → Fournisseurs.
+conteneur de développement n'autorise les sorties HTTPS que vers une liste blanche très
+courte (npm, principalement) ; ni ces deux fournisseurs, ni même l'API Supabase, ne sont
+joignables — `CONNECT tunnel failed, 403`. Le chemin réel se vérifie depuis un
+`npm run dev` local ou depuis le déploiement, via la sonde de Réglages → Fournisseurs.
+
+## Vérifications faites en fin de phase 2
+
+63 tests, dont 16 nouveaux sur les indicateurs : longueur préservée, `null` avant amorçage,
+valeurs exactes de SMA et EMA, RSI borné à 0–100 et sans `NaN` sur série plate, identité
+`histogramme = macd − signal`, et prise en compte des gaps par l'ATR.
+
+Vérification visuelle dans Chromium (Playwright), sur une page isolée puisque Supabase est
+injoignable depuis ce conteneur — l'appel `/api/marche/chandeliers` était intercepté et servi
+avec des bougies déterministes. Ce qui a été constaté :
+
+- graphique rendu, barre d'outils fonctionnelle, aucune erreur console ;
+- bascule des quatre indicateurs, changement d'intervalle, actualisation forcée ;
+- **3 appels API pour 3 actions** — aucun sondage emballé ;
+- tablette 800 × 1280 : aucun débordement horizontal, barre d'outils qui s'enroule.
+
+Non couvert : le comportement sur données réelles et le rendu du fil Realtime (phase 5).
+La page de vérification et la modification temporaire du middleware ont été retirées après
+coup — rien de cet échafaudage n'est dans le dépôt.
 
 ---
 
