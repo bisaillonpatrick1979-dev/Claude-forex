@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation';
 
+import { ConfigurationManquante } from '@/composants/configuration-manquante';
 import { BarreSuperieure } from '@/composants/enveloppe/barre-superieure';
 import { NavigationLaterale } from '@/composants/enveloppe/navigation-laterale';
 import type { ModeOperation } from '@/lib/config/drapeaux';
+import { variablesPubliquesManquantes } from '@/lib/config/env';
 import { clientServeur } from '@/lib/supabase/serveur';
 
 /**
@@ -11,6 +13,11 @@ import { clientServeur } from '@/lib/supabase/serveur';
  * uniquement du middleware pour sa sécurité.
  */
 export default async function LayoutFirme({ children }: { children: React.ReactNode }) {
+  const manquantes = variablesPubliquesManquantes();
+  if (manquantes.length > 0) {
+    return <ConfigurationManquante variables={manquantes} />;
+  }
+
   const supabase = await clientServeur();
   const { data: jetons } = await supabase.auth.getClaims();
   const profilId = jetons?.claims?.sub;

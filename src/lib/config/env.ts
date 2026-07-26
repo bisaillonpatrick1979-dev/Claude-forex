@@ -43,6 +43,30 @@ export function envPublic(): EnvPublic {
 }
 
 /**
+ * Variante non levante : rend `null` quand la configuration publique est
+ * absente. Sert aux points d'entrée qui doivent rester affichables sur un
+ * déploiement mal configuré — un écran qui dit ce qui manque vaut mieux qu'une
+ * erreur 500 opaque sur toutes les pages.
+ */
+export function envPublicOptionnel(): EnvPublic | null {
+  try {
+    return envPublic();
+  } catch {
+    return null;
+  }
+}
+
+/** Noms des variables publiques absentes, pour les afficher telles quelles. */
+export function variablesPubliquesManquantes(): readonly string[] {
+  const manquantes: string[] = [];
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) manquantes.push('NEXT_PUBLIC_SUPABASE_URL');
+  if (!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    manquantes.push('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY');
+  }
+  return manquantes;
+}
+
+/**
  * Variables strictement serveur. Appeler cette fonction depuis un composant
  * client ferait fuiter un secret : le garde ci-dessous rend la faute bruyante.
  */

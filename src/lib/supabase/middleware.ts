@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { envPublic } from '@/lib/config/env';
+import { envPublicOptionnel } from '@/lib/config/env';
 import type { Database } from '@/types/base-de-donnees';
 
 /** Chemins accessibles sans session. Tout le reste redirige vers /connexion. */
@@ -20,7 +20,12 @@ function estPublic(chemin: string): boolean {
  */
 export async function rafraichirSession(requete: NextRequest): Promise<NextResponse> {
   let reponse = NextResponse.next({ request: requete });
-  const env = envPublic();
+
+  // Configuration absente : on laisse passer sans authentifier. Les pages
+  // afficheront l'écran de diagnostic. Rediriger vers /connexion ici
+  // produirait une boucle, puisque /connexion échouerait de la même façon.
+  const env = envPublicOptionnel();
+  if (!env) return reponse;
 
   const supabase = createServerClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,

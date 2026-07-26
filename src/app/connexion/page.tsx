@@ -1,3 +1,5 @@
+import { ConfigurationManquante } from '@/composants/configuration-manquante';
+import { variablesPubliquesManquantes } from '@/lib/config/env';
 import { AVERTISSEMENT_RISQUE } from '@/lib/config/modes';
 
 import { FormulaireConnexion } from './formulaire';
@@ -9,6 +11,11 @@ export default async function PageConnexion({
 }: {
   searchParams: Promise<{ suivant?: string }>;
 }) {
+  const manquantes = variablesPubliquesManquantes();
+  if (manquantes.length > 0) {
+    return <ConfigurationManquante variables={manquantes} />;
+  }
+
   const params = await searchParams;
 
   return (
