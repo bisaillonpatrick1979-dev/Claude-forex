@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { EntetePage } from '@/composants/ui/entete-page';
 import { EtatVide, Panneau } from '@/composants/ui/panneau';
 import { formaterNombre } from '@/lib/format';
@@ -29,7 +31,17 @@ export default async function PageReglages() {
       />
 
       <div className="grid gap-3 xl:grid-cols-2">
-        <Panneau titre="Fournisseurs de données">
+        <Panneau
+          titre="Fournisseurs de données"
+          action={
+            <Link
+              href="/reglages/fournisseurs"
+              className="text-[11px] text-accent underline-offset-4 hover:underline"
+            >
+              Configurer
+            </Link>
+          }
+        >
           {!fournisseurs || fournisseurs.length === 0 ? (
             <EtatVide message="Aucun fournisseur configuré." />
           ) : (
@@ -62,8 +74,9 @@ export default async function PageReglages() {
             </table>
           )}
           <p className="mt-3 text-[11px] text-texte-attenue">
-            Saisie des clés, test de connexion et ordre de priorité par classe d’actifs : phase 1.
-            Les clés sont chiffrées en base et ne sont jamais renvoyées au navigateur.
+            Les clés sont chiffrées au repos (AES-256-GCM) et ne sont jamais renvoyées au
+            navigateur. Saisie, test de connexion et priorités par classe d’actifs sur la page
+            Configurer.
           </p>
         </Panneau>
 
