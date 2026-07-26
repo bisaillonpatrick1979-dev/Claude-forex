@@ -10,7 +10,8 @@ ne promet aucun rendement et n'affiche que des résultats mesurés.
 
 ## État
 
-Phases 0 (fondations), 1 (couche de données de marché) et 2 (graphique) livrées. Voir [NOTES.md](./NOTES.md)
+Phases 0 (fondations), 1 (données de marché), 2 (graphique) et 3 (moteur d'exécution
+et garde-fous de risque) livrées. Voir [NOTES.md](./NOTES.md)
 pour l'avancement détaillé, les décisions d'architecture et les dettes assumées.
 
 Le mode réel est verrouillé par trois barrières indépendantes (constante TypeScript,
@@ -49,6 +50,8 @@ fichiers.
 src/app/             routes (App Router) ; le groupe (firme) porte les pages authentifiées
 src/composants/      composants d'interface, dont le graphique en chandeliers
 src/lib/config/      drapeaux, modes, valeurs par défaut de risque, environnement
+src/lib/execution/   moteur simulé, coûts, marge, séances, persistance
+src/lib/risque/      garde-fous et estimation de corrélation
 src/lib/marche/      interface fournisseur, adaptateurs, routeur, quotas, cache
 src/lib/securite/    chiffrement des clés API, limitation de débit
 src/lib/supabase/    clients navigateur / serveur / admin / middleware
