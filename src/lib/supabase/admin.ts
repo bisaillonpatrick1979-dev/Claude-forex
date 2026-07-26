@@ -25,3 +25,16 @@ export function clientAdmin() {
     },
   );
 }
+
+/**
+ * Variante non levante, pour les écrans qui doivent rester affichables même
+ * quand la configuration serveur est incomplète : ils montrent alors ce qui
+ * manque au lieu de renvoyer une erreur 500 opaque.
+ */
+export function clientAdminOptionnel(): ReturnType<typeof clientAdmin> | null {
+  try {
+    return clientAdmin();
+  } catch {
+    return null;
+  }
+}
