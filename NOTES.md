@@ -12,7 +12,7 @@ Tenu à jour à chaque phase.
 | 0 | Fondations : Next.js 15, Supabase, schéma, RLS, auth, navigation, thème | ✅ livrée |
 | 1 | Données de marché : interface, adaptateurs, routeur, quotas, cache, réglages | ✅ livrée |
 | 2 | Graphique lightweight-charts v5, indicateurs, mise à jour en direct | ✅ livrée |
-| 3 | Moteur d'exécution simulé + garde-fous de risque | à faire |
+| 3 | Moteur d'exécution simulé + garde-fous de risque | ✅ livrée |
 | 4 | Agents et orchestration | à faire |
 | 5 | Salle des marchés en temps réel | à faire |
 | 6 | Backtest, mémoire pgvector, coûts | à faire |
@@ -218,6 +218,71 @@ refuse tout autre nom — la convention du framework l'emporte sur celle du proj
 
 ---
 
+## Décisions d'architecture (phase 3)
+
+### Le moteur ne connaît pas la base
+
+`traiterBougie(etat, contexte)` est une fonction pure : elle reçoit un état, rend un nouvel
+état, des événements et des écritures. `lib/execution/persistance.ts` est le seul fichier qui
+traduit vers Supabase.
+
+C'est ce qui rend vraie la promesse « un seul code, deux sources d'horloge » : le backtest
+(phase 6) fera tourner exactement le même moteur en boucle sur l'historique, sans écrire une
+ligne en base. Un backtest qui utiliserait un second moteur ne mesurerait pas le système qui
+tradera.
+
+### L'ordre des opérations dans une bougie est figé
+
+Expiration → stops et cibles → remplissages → portage → réévaluation → appel de marge.
+
+Les stops passent **avant** les nouveaux remplissages : une position déjà ouverte doit pouvoir
+être coupée par la bougie qui, par ailleurs, déclenche une entrée. L'inverse laisserait
+survivre des positions qui auraient dû sauter.
+
+### Toutes les ambiguïtés sont tranchées en défaveur du trader
+
+Sans données intra-bougie, plusieurs situations sont indécidables. Chaque fois, on retient
+l'hypothèse la plus défavorable — c'est la seule qui produise un backtest utilisable :
+
+- **stop et cible dans la même bougie** → le stop l'emporte ;
+- **ouverture au-delà du stop (gap)** → servi au prix d'ouverture, pas au stop. C'est là que
+  se logent les pertes supérieures au risque prévu ;
+- **ordre stop déclenché** → slippage appliqué, parce que c'est justement le moment où le
+  marché va vite ;
+- **take-profit** → pas de slippage (c'est un ordre limite), mais le spread s'applique quand
+  même ;
+- **liquidation sur appel de marge** → la position la plus perdante d'abord, une à la fois,
+  avec réévaluation entre chaque.
+
+### La conversion de devise n'est jamais devinée
+
+Un P&L en yens compté comme des dollars, c'est une erreur d'un facteur 150 qui ne déclenche
+aucune alerte. `tauxConversion` rend `null` quand il faudrait une cotation tierce (EUR/GBP sur
+un compte en dollars), et le moteur refuse alors d'ouvrir plutôt que de compter faux.
+
+### Les plafonds de risque sont des `if`, jamais des prompts
+
+`lib/risque/garde-fous.ts` est une fonction pure, sans accès à la base ni à l'horloge système.
+Tout entre par paramètre, donc tout est reproductible et testable. Elle **réduit** la taille
+plutôt que de refuser quand c'est possible — refuser systématiquement pousserait à relever les
+limites.
+
+Onze contrôles, tous journalisés, y compris ceux qui passent : l'interface montre la raison
+exacte d'un refus ou d'une réduction.
+
+### La corrélation est estimée par exposition aux devises
+
+Tant qu'il n'y a pas d'historique de rendements (phase 6), une vraie corrélation est
+impossible à calculer. Mais renoncer au plafond en attendant reviendrait à autoriser cinq fois
+le même pari sous cinq noms différents.
+
+Acheter EUR/USD, c'est être long EUR et short USD. La similarité cosinus de ces vecteurs
+capture les cas qui comptent : EUR/USD et GBP/USD longs sont corrélés, EUR/USD long et
+USD/CHF long le sont négativement. Pour les indices, actions et crypto, une valeur par classe.
+Heuristique assumée, remplaçable en phase 6.
+
+---
+
 ## Pièges rencontrés
 
 ### Le journal d'audit immuable bloquait la suppression d'un compte
@@ -236,6 +301,23 @@ phase 0 sont dans le journal pour toujours (`profil_id` d'un compte supprimé). 
 invisibles pour tout utilisateur réel, puisque la policy filtre sur `auth.uid()`. Les purger
 aurait voulu dire désactiver le trigger d'immuabilité, ce qui aurait vidé la garantie de son
 sens.
+
+### Un paramètre de slippage qui ne paramétrait rien
+
+Quand l'ATR n'est pas encore calculable, le slippage retombait sur une valeur dérivée du
+spread — mais **sans la multiplier par le paramètre**. Régler le slippage à zéro n'avait donc
+aucun effet tant qu'aucun ATR n'était disponible, c'est-à-dire sur les premières bougies de
+tout backtest. Trouvé par un test qui attendait un prix d'exécution exact.
+
+### Une miette de virgule flottante coûtait 0,5 % de taille à chaque ordre
+
+`1.08 − 1.075` vaut `0.005000000000000004` en binaire. Un plafond théorique de 2 lots
+ressortait donc à `1.9999999999999984`, que l'arrondi vers le bas au centième transformait
+en **1,99**. Le plancher est indispensable — arrondir vers le haut dépasserait la limite qu'on
+vient de calculer — mais il lui fallait une tolérance de 1e-9.
+
+Personne n'aurait remarqué : la taille est plausible, l'ordre passe, et on perd un demi-pour-cent
+d'exposition à chaque fois.
 
 ### L'axe du RSI montait à 120
 
@@ -312,8 +394,14 @@ Le scaffold installe Tailwind **v4**, configuré en CSS (`@theme` dans `globals.
   publiques par nature). La clé `service_role` n'est **pas** présente : elle devra être
   ajoutée pour la phase 1 (cache de chandeliers écrit côté serveur) et sur Vercel.
 - **Aucun test de composant.** Vitest tourne en environnement `node` sur la logique métier
-  pure. Les tests qui comptent — moteur de risque, moteur d'exécution, anti-look-ahead —
-  arrivent en phase 3, et c'est là qu'ils seront exigés.
+  pure : moteur d'exécution, garde-fous de risque, indicateurs, routeur de données. Les
+  composants d'interface sont vérifiés au navigateur, pas en test unitaire.
+- **Pas de calendrier économique branché.** `evaluerGardeFous` sait refuser une ouverture dans
+  la fenêtre d'un événement à fort impact, mais la liste d'événements lui est passée vide tant
+  que le flux n'existe pas (Finnhub le fournit — phase 4). Le contrôle est en place, sa source
+  ne l'est pas encore : c'est signalé ici pour ne pas croire la protection active.
+- **`avancerMarche` est déclenché à la main** depuis l'interface. Le passage en cron Vercel
+  viendra avec les déclencheurs planifiés de la phase 4.
 - **Index IVFFlat sur `lecons.embedding`** avec `lists = 100` : sous-optimal tant qu'il y a
   peu de leçons, mais bien moins gourmand en mémoire que HNSW sur le palier gratuit. À
   revoir si le volume dépasse quelques milliers de lignes.
@@ -391,6 +479,29 @@ avec des bougies déterministes. Ce qui a été constaté :
 Non couvert : le comportement sur données réelles et le rendu du fil Realtime (phase 5).
 La page de vérification et la modification temporaire du middleware ont été retirées après
 coup — rien de cet échafaudage n'est dans le dépôt.
+
+## Vérifications faites en fin de phase 3
+
+118 tests. Les plus importants :
+
+- **anti-look-ahead** (6 tests, fichier dédié) : aucun remplissage sur la bougie de décision
+  ni avant, pour les trois types d'ordres ; et un cas où la clôture de la bougie de décision
+  était le meilleur prix de la séquence — le moteur ne peut pas y accéder ;
+- **grand livre** : sur un scénario de six bougies avec deux entrées, deux sorties sur cible
+  et un passage de rollover, la somme des écritures reconstitue le solde final à 1e-8, et
+  chaque écriture porte le solde résultant exact ;
+- **équité = solde + latent** tant qu'une position est ouverte, et le sommet d'équité ne
+  redescend jamais ;
+- **conversion de devise** : USD/JPY sur compte en dollars, et refus de compter sans taux ;
+- **gap défavorable**, **stop et cible dans la même bougie**, **hors séance**,
+  **remplissage partiel**, **expiration**, **appel de marge et liquidation de la plus
+  perdante**, **portage facturé une seule fois par rollover** ;
+- **garde-fous** : les huit refus francs et les quatre réductions de taille, plus la
+  corrélation par exposition aux devises.
+
+Non vérifié : le passage d'ordres depuis l'interface déployée, Supabase étant injoignable
+depuis ce conteneur. La logique comptable est en revanche couverte de bout en bout par le
+scénario multi-bougies, qui traverse exactement le même code que l'interface.
 
 ---
 

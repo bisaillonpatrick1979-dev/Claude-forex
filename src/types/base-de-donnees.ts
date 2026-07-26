@@ -992,6 +992,7 @@ export type Database = {
         Row: {
           capital_initial: number
           cree_le: string
+          dernier_horodatage_traite: number | null
           devise: string
           equite: number
           gele: boolean
@@ -1009,6 +1010,7 @@ export type Database = {
         Insert: {
           capital_initial?: number
           cree_le?: string
+          dernier_horodatage_traite?: number | null
           devise?: string
           equite?: number
           gele?: boolean
@@ -1026,6 +1028,7 @@ export type Database = {
         Update: {
           capital_initial?: number
           cree_le?: string
+          dernier_horodatage_traite?: number | null
           devise?: string
           equite?: number
           gele?: boolean

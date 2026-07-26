@@ -1,7 +1,7 @@
 'use client';
 
 import dynamique from 'next/dynamic';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { atr, derniereValeur, clotures, rsi } from '@/lib/marche/indicateurs';
 import { INTERVALLES } from '@/lib/marche/intervalles';
@@ -46,15 +46,32 @@ export function ZoneGraphique({
   symboleInitial = 'EURUSD',
   intervalleInitial = 'M5',
   marqueurs = [],
+  symboleControle,
+  intervalleControle,
+  surSymbole,
+  surIntervalle,
+  surDernierPrix,
 }: {
   symboles: readonly SymboleOption[];
   symboleInitial?: string;
   intervalleInitial?: Intervalle;
   marqueurs?: readonly MarqueurDecision[];
+  /** Mode contrôlé : la salle des marchés partage le couple symbole/intervalle
+   *  entre le graphique et le billet d'ordre. */
+  symboleControle?: string;
+  intervalleControle?: Intervalle;
+  surSymbole?: (symbole: string) => void;
+  surIntervalle?: (intervalle: Intervalle) => void;
+  surDernierPrix?: (prix: number | null) => void;
 }) {
-  const [symbole, setSymbole] = useState(symboleInitial);
-  const [intervalle, setIntervalle] = useState<Intervalle>(intervalleInitial);
+  const [symboleInterne, setSymboleInterne] = useState(symboleInitial);
+  const [intervalleInterne, setIntervalleInterne] = useState<Intervalle>(intervalleInitial);
   const [indicateurs, setIndicateurs] = useState<IndicateursActifs>(INDICATEURS_DEFAUT);
+
+  const symbole = symboleControle ?? symboleInterne;
+  const intervalle = intervalleControle ?? intervalleInterne;
+  const setSymbole = surSymbole ?? setSymboleInterne;
+  const setIntervalle = surIntervalle ?? setIntervalleInterne;
 
   const etat = useChandeliers(symbole, intervalle);
   const decimales = symboles.find((option) => option.code === symbole)?.decimales ?? 5;
@@ -67,6 +84,12 @@ export function ZoneGraphique({
       dernier: etat.chandeliers[etat.chandeliers.length - 1]?.cloture ?? null,
     };
   }, [etat.chandeliers]);
+
+  // Le dernier prix remonte au parent : les positions ouvertes affichent leur
+  // P&L latent avec la même valeur que celle lue sur le graphique.
+  useEffect(() => {
+    surDernierPrix?.(mesures.dernier);
+  }, [mesures.dernier, surDernierPrix]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
