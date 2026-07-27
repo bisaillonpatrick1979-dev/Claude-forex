@@ -5,10 +5,12 @@ import { useState, useTransition } from 'react';
 import {
   confierLaMainAuxAgents,
   definirPerimetreFirme,
+  definirSeancesAgents,
   toutMettreEnValidation,
 } from '@/app/actions/agents';
 import { definirAllocationAgents } from '@/app/actions/cycles';
 import { couleurPnl, formaterMonnaie, formaterPourcentage } from '@/lib/format';
+import { SEANCES } from '@/lib/marche/seances-mondiales';
 
 /**
  * Poste de commande des agents, dans la salle des marchés.
@@ -61,6 +63,8 @@ export function PanneauEnveloppe({
   modeOperation,
   agentsAutonomes,
   classesAutorisees,
+  seancesAutorisees,
+  seancesOuvertesMaintenant,
 }: {
   enveloppe: EtatEnveloppe;
   devise: string;
@@ -68,9 +72,12 @@ export function PanneauEnveloppe({
   modeOperation: string;
   agentsAutonomes: number;
   classesAutorisees: readonly string[];
+  seancesAutorisees: readonly string[];
+  seancesOuvertesMaintenant: readonly string[];
 }) {
   const [montant, setMontant] = useState(String(enveloppe.alloue));
   const [marches, setMarches] = useState<readonly string[]>(classesAutorisees);
+  const [seances, setSeances] = useState<readonly string[]>(seancesAutorisees);
   const [retour, setRetour] = useState<string | null>(null);
   const [enCours, demarrer] = useTransition();
 
@@ -141,6 +148,16 @@ export function PanneauEnveloppe({
         />
       </div>
 
+      {enveloppe.profitsRealises === 0 &&
+      enveloppe.pertesRealisees === 0 &&
+      enveloppe.latent === 0 ? (
+        <p className="rounded border border-bordure bg-panneau-clair px-2.5 py-2 text-xs text-texte-attenue">
+          Aucune position d’agent n’a encore été ouverte ni fermée. Ces quatre cellules ne
+          comptent que les trades des agents — vos ordres passés à la main figurent dans le
+          portefeuille, à gauche, et dans le journal des placements.
+        </p>
+      ) : null}
+
       <p className="chiffre text-[0.72rem] text-texte-attenue/70">
         Variation depuis l’allocation : {formaterPourcentage(enveloppe.variationPct)} · marge
         engagée {formaterMonnaie(enveloppe.margeEngagee, devise)}. Le latent vaut au dernier
@@ -185,6 +202,57 @@ export function PanneauEnveloppe({
           {marches.length === 0
             ? 'Autoriser tous les marchés'
             : `Limiter aux ${marches.length} marché(s) choisi(s)`}
+        </button>
+      </div>
+
+      <div className="border-t border-bordure pt-3">
+        <p className="mb-2 text-xs text-texte-attenue">
+          Heures de marché — rien de coché veut dire « à toute heure ».
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {SEANCES.map((seance) => {
+            const choisie = seances.includes(seance.code);
+            const ouverte = seancesOuvertesMaintenant.includes(seance.code);
+            return (
+              <button
+                key={seance.code}
+                type="button"
+                title={seance.description}
+                onClick={() =>
+                  setSeances((actuelles) =>
+                    choisie
+                      ? actuelles.filter((code) => code !== seance.code)
+                      : [...actuelles, seance.code],
+                  )
+                }
+                className={`flex items-center gap-1.5 rounded border px-2 py-1 text-xs transition ${
+                  choisie
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-bordure text-texte-attenue hover:border-bordure-vive'
+                }`}
+              >
+                {/* Pastille verte : séance ouverte à l'instant. C'est ce qui
+                    permet de comprendre pourquoi la veille attend. */}
+                <span
+                  aria-hidden
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    ouverte ? 'bg-hausse' : 'bg-bordure-vive'
+                  }`}
+                />
+                {seance.nom}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          disabled={enCours}
+          onClick={() => soumettre(() => definirSeancesAgents(seances))}
+          className="mt-2 w-full rounded border border-bordure-vive px-2 py-1.5 text-xs transition hover:border-accent disabled:opacity-50"
+        >
+          {seances.length === 0
+            ? 'Laisser les agents travailler à toute heure'
+            : `Limiter aux ${seances.length} séance(s) choisie(s)`}
         </button>
       </div>
 

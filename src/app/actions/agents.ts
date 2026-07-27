@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { ROLES_EXECUTANTS } from '@/lib/agents/niveaux';
 import { estFournisseurLLM } from '@/lib/ia';
+import { nomSeance, SEANCES } from '@/lib/marche/seances-mondiales';
 import { clientServeur } from '@/lib/supabase/serveur';
 import { profilAuthentifie } from '@/lib/supabase/session';
 
@@ -255,6 +256,43 @@ export async function definirPerimetreFirme(
         : `${data?.length ?? 0} agent(s) limités à : ${classesValides.join(', ')}${
             symbolesValides.length > 0 ? ` (${symbolesValides.join(', ')})` : ''
           }.`,
+  };
+}
+
+/**
+ * Séances de marché pendant lesquelles les agents ont le droit de travailler.
+ *
+ * Le Forex ne ferme pas, mais ouvrir une position à 3 h UTC revient à trader
+ * dans un marché fin, où le spread s'élargit et où un stop se fait toucher par
+ * du bruit. Restreindre aux séances actives est une décision de méthode, pas
+ * une contrainte technique : rien n'est imposé par défaut.
+ *
+ * Sélection vide = aucune restriction, comme pour le périmètre d'instruments.
+ */
+export async function definirSeancesAgents(
+  seances: readonly string[],
+): Promise<ResultatAgent> {
+  const ctx = await contexte();
+  if (!ctx) return { ok: false, message: 'Session expirée.' };
+
+  const valides = seances.filter((code) =>
+    (SEANCES as readonly { code: string }[]).some((seance) => seance.code === code),
+  );
+
+  const { error } = await ctx.supabase
+    .from('profils')
+    .update({ seances_agents: valides })
+    .eq('id', ctx.profilId);
+
+  if (error) return { ok: false, message: messageErreur(error) };
+
+  revalidatePath('/salle-des-marches');
+  return {
+    ok: true,
+    message:
+      valides.length === 0
+        ? 'Aucune restriction d’horaire : les agents travaillent dès qu’une bougie se ferme.'
+        : `Agents actifs uniquement pendant : ${valides.map((code) => nomSeance(code as never)).join(', ')}.`,
   };
 }
 
