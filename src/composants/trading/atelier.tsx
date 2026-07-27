@@ -96,10 +96,22 @@ export function Atelier({
           />
         </section>
 
-        <div className="flex min-h-0 flex-col gap-3">
-          {panneauAgents}
+        {/* La colonne de droite ne dépasse jamais la hauteur du graphique.
+            C'était le vrai défaut : le fil grandissait à chaque message, la
+            rangée s'étirait avec lui, et il fallait faire défiler toutes les
+            analyses pour atteindre le billet d'ordre. Le fil défile désormais
+            dans son propre cadre — on voit les derniers messages, le reste
+            s'atteint en remontant dedans, pas en poussant la page. */}
+        <div className="flex min-h-0 flex-col gap-3 xl:h-[68vh]">
+          {/* L'enveloppe garde sa taille : c'est un bloc de chiffres, le
+              rétrécir les tronquerait. C'est au fil de céder la place. */}
+          <div className="shrink-0">{panneauAgents}</div>
 
-          <Panneau titre="Fil des spécialistes" className="min-h-[20rem] flex-1">
+          <Panneau
+            titre="Fil des spécialistes"
+            corpsDefilant
+            className="min-h-[14rem] max-h-[24rem] flex-1 xl:max-h-none"
+          >
             <FilSpecialistes
               profilId={profilId}
               symbole={symbole}

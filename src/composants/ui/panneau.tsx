@@ -6,11 +6,22 @@ export function Panneau({
   action,
   children,
   className = '',
+  corpsDefilant = false,
 }: {
   titre?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  /**
+   * Le contenu défile à l'intérieur du panneau au lieu de l'étirer.
+   *
+   * `corps-panneau` ne rend ce service qu'en mode cockpit, c'est-à-dire sur un
+   * écran à la fois large et haut. Un panneau dont le contenu grandit sans fin
+   * — le fil des agents — a besoin du même comportement sur *tous* les écrans,
+   * sinon il repousse indéfiniment ce qui se trouve en dessous et oblige à
+   * défiler la page entière pour atteindre le panneau suivant.
+   */
+  corpsDefilant?: boolean;
 }) {
   return (
     // `corps-panneau` ne fait rien hors du mode cockpit : le panneau prend
@@ -28,7 +39,11 @@ export function Panneau({
           {action}
         </header>
       ) : null}
-      <div className="corps-panneau flex-1 p-3">{children}</div>
+      <div
+        className={`corps-panneau flex-1 p-3 ${corpsDefilant ? 'min-h-0 overflow-auto' : ''}`}
+      >
+        {children}
+      </div>
     </section>
   );
 }
