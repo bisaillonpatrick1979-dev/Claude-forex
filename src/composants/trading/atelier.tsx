@@ -10,6 +10,7 @@ import type { Intervalle } from '@/lib/marche/types';
 
 import { BilletOrdre } from './billet-ordre';
 import { CommandeRejeu, type EtatRejeu } from './commande-rejeu';
+import { Placements, type PlacementAffiche } from './placements';
 import {
   OrdresEnAttente,
   PositionsOuvertes,
@@ -29,6 +30,7 @@ export function Atelier({
   positions,
   ordres,
   sourcesMarqueurs,
+  placements,
   panneauFirme,
   panneauAgents,
   profilId,
@@ -40,6 +42,7 @@ export function Atelier({
   positions: readonly PositionAffichee[];
   ordres: readonly OrdreAffiche[];
   sourcesMarqueurs: SourcesMarqueurs;
+  placements: readonly PlacementAffiche[];
   panneauFirme: React.ReactNode;
   panneauAgents: React.ReactNode;
   profilId: string;
@@ -99,17 +102,26 @@ export function Atelier({
         </Panneau>
       </div>
 
-      <section className="cockpit-plein order-1 flex h-[60vh] min-h-96 flex-col overflow-hidden rounded-lg border border-bordure bg-panneau xl:order-2">
-        <ZoneGraphique
-          symboles={symboles}
-          marqueurs={marqueurs}
-          symboleControle={symbole}
-          intervalleControle={intervalle}
-          surSymbole={setSymbole}
-          surIntervalle={setIntervalle}
-          surDernierPrix={surDernierPrix}
-        />
-      </section>
+      {/* Colonne centrale : le graphique, et juste dessous ce que la firme a
+          réellement placé. C'est la lecture naturelle — on regarde le prix,
+          puis on regarde ce qu'on en a fait. */}
+      <div className="cockpit-flexible order-1 flex flex-col gap-3 xl:order-2">
+        <section className="flex h-[55vh] min-h-96 flex-col overflow-hidden rounded-lg border border-bordure bg-panneau xl:h-auto xl:flex-[3] xl:min-h-0">
+          <ZoneGraphique
+            symboles={symboles}
+            marqueurs={marqueurs}
+            symboleControle={symbole}
+            intervalleControle={intervalle}
+            surSymbole={setSymbole}
+            surIntervalle={setIntervalle}
+            surDernierPrix={surDernierPrix}
+          />
+        </section>
+
+        <Panneau titre="Placements de la firme" className="xl:flex-[2]">
+          <Placements placements={placements} />
+        </Panneau>
+      </div>
 
       <div className="cockpit-flexible order-2 flex flex-col gap-3 xl:order-3">
         {panneauAgents}

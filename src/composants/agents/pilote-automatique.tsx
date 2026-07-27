@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { veiller } from '@/app/actions/cycles';
+import { instrumentsSurveilles, veiller } from '@/app/actions/cycles';
 import type { Intervalle } from '@/lib/marche/types';
 
 /**
@@ -44,6 +44,8 @@ export function PiloteAutomatique({
   const [etat, setEtat] = useState<string | null>(null);
   const [cycles, setCycles] = useState(0);
   const [dernierTour, setDernierTour] = useState<number | null>(null);
+  const [instruments, setInstruments] = useState<readonly string[]>([]);
+  const [surveilleTout, setSurveilleTout] = useState(true);
 
   // Références : la boucle ne doit pas se reconstruire à chaque changement de
   // cadence ou de symbole, sinon elle se dédouble.
@@ -53,19 +55,46 @@ export function PiloteAutomatique({
   cadenceRef.current = cadence;
   const contexteRef = useRef({ symbole, intervalle });
   contexteRef.current = { symbole, intervalle };
+  const instrumentsRef = useRef<readonly string[]>([]);
+  instrumentsRef.current = instruments;
+  const toutRef = useRef(surveilleTout);
+  toutRef.current = surveilleTout;
+
+  // Périmètre autorisé, relu à l'ouverture : c'est lui qui décide sur quoi la
+  // veille tourne, pas ce qui est affiché à l'écran.
+  useEffect(() => {
+    let annule = false;
+    void instrumentsSurveilles().then((liste) => {
+      if (!annule) setInstruments(liste.map((entree) => entree.code));
+    });
+    return () => {
+      annule = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!actif) return;
     let annule = false;
 
+    // Rotation sur les instruments autorisés. Un tour complet par cadence
+    // plutôt qu'un cycle sur tous d'un coup : quatre délibérations simultanées
+    // dépasseraient le budget d'une seule et la durée d'une requête.
+    let rang = 0;
+
     const boucle = async () => {
       while (!annule && actifRef.current) {
-        const { symbole: instrument, intervalle: unite } = contexteRef.current;
+        const { symbole: affiche, intervalle: unite } = contexteRef.current;
+        const liste = instrumentsRef.current;
+        const surTout = toutRef.current && liste.length > 0;
+
+        const instrument = surTout ? (liste[rang % liste.length] ?? affiche) : affiche;
+        if (surTout) rang += 1;
+
         const resultat = await veiller(instrument, unite);
 
         if (annule) return;
 
-        setEtat(resultat.message);
+        setEtat(`${instrument} — ${resultat.message}`);
         setDernierTour(Date.now());
 
         if (resultat.aTravaille) {
@@ -125,11 +154,27 @@ export function PiloteAutomatique({
         </select>
       </div>
 
+      <label className="flex items-center gap-2 text-xs text-texte-attenue">
+        <input
+          type="checkbox"
+          checked={surveilleTout}
+          onChange={(evenement) => setSurveilleTout(evenement.target.checked)}
+          className="h-4 w-4 accent-[var(--color-accent)]"
+        />
+        Surveiller tous les instruments autorisés
+        {instruments.length > 0 ? ` (${instruments.length})` : ''}
+        {!surveilleTout ? ` — seulement ${symbole}` : ''}
+      </label>
+
       {actif ? (
         <p className="flex items-center gap-1.5 text-xs text-texte-attenue">
           <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-hausse" />
-          Les agents surveillent {symbole} en {intervalle}. Ils délibèrent à chaque nouvelle
-          bougie fermée — au plus une fois par bougie, pour ne pas refacturer la même analyse.
+          Les agents surveillent{' '}
+          {surveilleTout && instruments.length > 0
+            ? `${instruments.length} instrument(s)`
+            : symbole}{' '}
+          en {intervalle}, un à la fois par tour. Ils délibèrent à chaque nouvelle bougie fermée —
+          au plus une fois par bougie, pour ne pas refacturer la même analyse.
         </p>
       ) : (
         <p className="text-xs text-texte-attenue">

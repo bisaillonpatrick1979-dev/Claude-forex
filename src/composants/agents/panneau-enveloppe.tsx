@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from 'react';
 
-import { confierLaMainAuxAgents, toutMettreEnValidation } from '@/app/actions/agents';
+import {
+  confierLaMainAuxAgents,
+  definirPerimetreFirme,
+  toutMettreEnValidation,
+} from '@/app/actions/agents';
 import { definirAllocationAgents } from '@/app/actions/cycles';
 import { couleurPnl, formaterMonnaie, formaterPourcentage } from '@/lib/format';
 
@@ -34,20 +38,39 @@ export interface EtatEnveloppe {
   readonly margeEngagee: number;
 }
 
+/**
+ * Marchés que les agents peuvent traiter.
+ *
+ * Aucune classe cochée signifie « aucune restriction » — c'est la convention
+ * de `evaluerPermission`, et l'inverser ici donnerait deux sémantiques à la
+ * même colonne. L'interface le dit en toutes lettres plutôt que de laisser
+ * deviner.
+ */
+const MARCHES: readonly { code: string; libelle: string }[] = [
+  { code: 'FOREX', libelle: 'Forex' },
+  { code: 'INDICE', libelle: 'Indices (Nasdaq…)' },
+  { code: 'ACTION', libelle: 'Actions' },
+  { code: 'CRYPTO', libelle: 'Crypto' },
+  { code: 'MATIERE_PREMIERE', libelle: 'Matières premières' },
+];
+
 export function PanneauEnveloppe({
   enveloppe,
   devise,
   equiteCompte,
   modeOperation,
   agentsAutonomes,
+  classesAutorisees,
 }: {
   enveloppe: EtatEnveloppe;
   devise: string;
   equiteCompte: number | null;
   modeOperation: string;
   agentsAutonomes: number;
+  classesAutorisees: readonly string[];
 }) {
   const [montant, setMontant] = useState(String(enveloppe.alloue));
+  const [marches, setMarches] = useState<readonly string[]>(classesAutorisees);
   const [retour, setRetour] = useState<string | null>(null);
   const [enCours, demarrer] = useTransition();
 
@@ -123,6 +146,47 @@ export function PanneauEnveloppe({
         engagée {formaterMonnaie(enveloppe.margeEngagee, devise)}. Le latent vaut au dernier
         horodatage traité par le moteur, pas à la seconde présente.
       </p>
+
+      <div className="border-t border-bordure pt-3">
+        <p className="mb-2 text-xs text-texte-attenue">
+          Marchés autorisés — rien de coché veut dire « tous ».
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {MARCHES.map((marche) => {
+            const choisi = marches.includes(marche.code);
+            return (
+              <button
+                key={marche.code}
+                type="button"
+                onClick={() =>
+                  setMarches((actuels) =>
+                    choisi
+                      ? actuels.filter((code) => code !== marche.code)
+                      : [...actuels, marche.code],
+                  )
+                }
+                className={`rounded border px-2 py-1 text-xs transition ${
+                  choisi
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-bordure text-texte-attenue hover:border-bordure-vive'
+                }`}
+              >
+                {marche.libelle}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          disabled={enCours}
+          onClick={() => soumettre(() => definirPerimetreFirme(marches, []))}
+          className="mt-2 w-full rounded border border-bordure-vive px-2 py-1.5 text-xs transition hover:border-accent disabled:opacity-50"
+        >
+          {marches.length === 0
+            ? 'Autoriser tous les marchés'
+            : `Limiter aux ${marches.length} marché(s) choisi(s)`}
+        </button>
+      </div>
 
       <div className="border-t border-bordure pt-3">
         <p className="mb-2 text-xs text-texte-attenue">

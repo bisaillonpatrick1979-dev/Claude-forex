@@ -289,13 +289,36 @@ async function reevaluerPositions(
   positions: readonly PositionOuverte[],
 ): Promise<void> {
   const reevaluation = contexte.reevaluation;
-  if (!reevaluation || reevaluation.taux === null || positions.length === 0) return;
+  if (!reevaluation) return;
+  await reevaluerOuvertes(client, reevaluation.contexte, reevaluation.taux, positions);
+}
 
-  const taux = reevaluation.taux;
+/**
+ * Écrit le latent des positions ouvertes, indépendamment de tout événement.
+ *
+ * `appliquerResultat` n'est appelée que lorsqu'une bougie produit quelque
+ * chose — un remplissage, une fermeture, une écriture comptable. Une position
+ * détenue pendant cent bougies calmes ne déclenchait donc aucune réévaluation
+ * en base, et l'interface affichait un latent de zéro alors que le prix avait
+ * bougé. Les chiffres montrés doivent être les vrais : cette fonction est
+ * appelée à la fin de chaque avancée, qu'il se soit passé quelque chose ou non.
+ *
+ * Sans taux de conversion connu, on s'abstient plutôt que d'écrire zéro : une
+ * position à l'équilibre et une position non évaluable ne sont pas la même
+ * chose.
+ */
+export async function reevaluerOuvertes(
+  client: Client,
+  contexte: ContexteBougie,
+  taux: number | null,
+  positions: readonly PositionOuverte[],
+): Promise<void> {
+  if (taux === null || positions.length === 0) return;
+
   for (const position of positions) {
     await client
       .from('positions')
-      .update({ pnl_latent: pnlLatent(position, reevaluation.contexte, taux) })
+      .update({ pnl_latent: pnlLatent(position, contexte, taux) })
       .eq('id', position.id);
   }
 }

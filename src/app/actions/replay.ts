@@ -5,7 +5,12 @@ import { z } from 'zod';
 
 import { tauxConversion } from '@/lib/execution/couts';
 import { traiterBougie } from '@/lib/execution/moteur';
-import { appliquerResultat, chargerEtat, chargerInstrument } from '@/lib/execution/persistance';
+import {
+  appliquerResultat,
+  chargerEtat,
+  chargerInstrument,
+  reevaluerOuvertes,
+} from '@/lib/execution/persistance';
 import { SIMULATION_DEFAUT, type ContexteBougie } from '@/lib/execution/types';
 import {
   bougiesApres,
@@ -294,6 +299,26 @@ export async function avancerRejeu(bougies: number): Promise<ResultatRejeu> {
   }
 
   const termine = dernierHorodatage >= fin;
+
+  const derniereBougie = aTraiter[aTraiter.length - 1]!;
+  const tauxFinal = tauxConversion(
+    instrument.instrument,
+    derniereBougie.cloture,
+    persiste.etat.portefeuille.devise,
+  );
+  await reevaluerOuvertes(
+    client,
+    {
+      instrument: instrument.instrument,
+      intervalle,
+      bougie: derniereBougie,
+      atr: null,
+      tauxCotationVersCompte: tauxFinal,
+      parametres: SIMULATION_DEFAUT,
+    },
+    tauxFinal,
+    etat.positions,
+  );
 
   await client
     .from('portefeuilles')
