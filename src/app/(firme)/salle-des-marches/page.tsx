@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { PanneauEnveloppe } from '@/composants/agents/panneau-enveloppe';
 import { Atelier } from '@/composants/trading/atelier';
+import type { PlacementAffiche } from '@/composants/trading/placements';
 import type { OrdreAffiche, PositionAffichee } from '@/composants/trading/positions-ouvertes';
 import { EtatVide, Panneau } from '@/composants/ui/panneau';
 import { couleurPnl, formaterMonnaie, formaterPourcentage, versNombre } from '@/lib/format';
@@ -32,6 +33,7 @@ export default async function PageSalleDesMarches() {
     { data: profil },
     { data: agents },
     { count: agentsAutonomes },
+    { data: perimetres },
   ] = await Promise.all([
       supabase
         .from('portefeuilles')
@@ -63,9 +65,54 @@ export default async function PageSalleDesMarches() {
         .select('agent_id', { count: 'exact', head: true })
         .eq('profil_id', profilId)
         .eq('niveau', 'AUTONOME'),
+      supabase.from('permissions_agents').select('classes_autorisees').eq('profil_id', profilId),
     ]);
 
   const sourcesMarqueurs = await chargerSourcesMarqueurs(supabase, profilId);
+
+  // Journal des placements : positions ouvertes d'abord, puis les fermetures
+  // les plus récentes. Le raisonnement vient de la proposition d'origine quand
+  // la position est née d'une décision d'agent.
+  const { data: lignesPlacements } = await supabase
+    .from('positions')
+    .select(
+      'id, sens, quantite, prix_entree, prix_sortie, stop_loss, take_profit, pnl_realise, pnl_latent, statut, motif_sortie, origine, ouvert_le, ferme_le, symboles(code, decimales, classe_actif), ordres(propositions_ordres(raisonnement))',
+    )
+    .eq('profil_id', profilId)
+    .order('statut', { ascending: true })
+    .order('ouvert_le', { ascending: false })
+    .limit(60);
+
+  const placements: PlacementAffiche[] = (lignesPlacements ?? []).map((ligne) => {
+    const proposition = Array.isArray(ligne.ordres)
+      ? ligne.ordres[0]?.propositions_ordres
+      : (ligne.ordres as { propositions_ordres?: unknown } | null)?.propositions_ordres;
+    const raisonnement = Array.isArray(proposition)
+      ? (proposition[0] as { raisonnement?: string } | undefined)?.raisonnement
+      : (proposition as { raisonnement?: string } | null)?.raisonnement;
+
+    return {
+      id: ligne.id,
+      symbole: ligne.symboles?.code ?? '—',
+      classeActif: ligne.symboles?.classe_actif ?? '—',
+      sens: ligne.sens,
+      quantite: Number(ligne.quantite),
+      prixEntree: Number(ligne.prix_entree),
+      prixSortie: ligne.prix_sortie === null ? null : Number(ligne.prix_sortie),
+      stopLoss: ligne.stop_loss === null ? null : Number(ligne.stop_loss),
+      takeProfit: ligne.take_profit === null ? null : Number(ligne.take_profit),
+      pnlRealise: ligne.pnl_realise === null ? null : Number(ligne.pnl_realise),
+      pnlLatent: Number(ligne.pnl_latent ?? 0),
+      statut: ligne.statut,
+      motif: ligne.motif_sortie,
+      origine: ligne.origine,
+      ouvertLe: ligne.ouvert_le,
+      fermeLe: ligne.ferme_le,
+      decimales: ligne.symboles?.decimales ?? 5,
+      devise,
+      raisonnement: raisonnement ?? null,
+    };
+  });
 
   // L'enveloppe passe par le client à privilèges : elle agrège des positions
   // fermées que RLS laisse lire, mais le calcul doit rester identique à celui
@@ -79,6 +126,14 @@ export default async function PageSalleDesMarches() {
   const capitalInitial = versNombre(portefeuille?.capital_initial);
   const sommet = versNombre(portefeuille?.sommet_equite);
   const devise = portefeuille?.devise ?? 'USD';
+
+  // Décomposition exacte, pas une approximation : par construction du moteur,
+  // le solde ne contient que du réalisé et l'équité vaut solde + latent. Les
+  // afficher séparément permet de recouper avec le journal des placements —
+  // un total unique ne se vérifie pas.
+  const solde = versNombre(portefeuille?.solde);
+  const pnlRealise = solde !== null && capitalInitial !== null ? solde - capitalInitial : null;
+  const pnlLatentTotal = equite !== null && solde !== null ? equite - solde : null;
 
   const pnlCumule = equite !== null && capitalInitial !== null ? equite - capitalInitial : null;
   const pnlCumulePct =
@@ -112,7 +167,17 @@ export default async function PageSalleDesMarches() {
       {portefeuille ? (
         <dl className="flex flex-col gap-2 text-sm">
           <Ligne libelle="Équité" valeur={formaterMonnaie(equite, devise)} />
-          <Ligne libelle="Solde" valeur={formaterMonnaie(versNombre(portefeuille.solde), devise)} />
+          <Ligne libelle="Solde (réalisé)" valeur={formaterMonnaie(solde, devise)} />
+          <Ligne
+            libelle="Gains/pertes réalisés"
+            valeur={formaterMonnaie(pnlRealise, devise)}
+            classeValeur={couleurPnl(pnlRealise)}
+          />
+          <Ligne
+            libelle="Latent (positions ouvertes)"
+            valeur={formaterMonnaie(pnlLatentTotal, devise)}
+            classeValeur={couleurPnl(pnlLatentTotal)}
+          />
           <Ligne
             libelle="P&L cumulé"
             valeur={formaterMonnaie(pnlCumule, devise)}
@@ -158,6 +223,9 @@ export default async function PageSalleDesMarches() {
           equiteCompte={equite}
           modeOperation={profil?.mode_operation ?? 'PAPIER_VALIDATION'}
           agentsAutonomes={agentsAutonomes ?? 0}
+          classesAutorisees={[
+            ...new Set((perimetres ?? []).flatMap((ligne) => ligne.classes_autorisees ?? [])),
+          ]}
         />
       ) : (
         <EtatVide message="SUPABASE_SERVICE_ROLE_KEY absente : l’enveloppe des agents ne peut pas être calculée." />
@@ -171,6 +239,7 @@ export default async function PageSalleDesMarches() {
       positions={positionsAffichees}
       ordres={ordresAffiches}
       sourcesMarqueurs={sourcesMarqueurs}
+      placements={placements}
       panneauFirme={panneauFirme}
       panneauAgents={panneauAgents}
       profilId={profilId}

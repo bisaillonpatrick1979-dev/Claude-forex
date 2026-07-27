@@ -1032,6 +1032,62 @@ sans recherche vaut mieux que pas d'analyse.
 
 ---
 
+## Décisions (véracité des chiffres et multi-marchés)
+
+### Le latent était toujours nul en papier temps réel
+
+Bug réel, signalé par le propriétaire. `appliquerResultat` n'est appelée que
+lorsqu'une bougie produit quelque chose — remplissage, fermeture, écriture
+comptable. Une position détenue pendant cent bougies calmes ne déclenchait donc
+aucune réévaluation en base : `positions.pnl_latent` restait à zéro et
+l'enveloppe des agents affichait « Latent 0,00 $ » quel que soit le prix.
+
+`reevaluerOuvertes()` est désormais appelée à la fin de chaque avancée —
+temps réel comme rejeu — indépendamment de tout événement. Sans taux de
+conversion connu, on s'abstient plutôt que d'écrire zéro : une position à
+l'équilibre et une position non évaluable ne sont pas la même chose.
+
+### Le portefeuille se décompose, il ne se résume pas
+
+`P&L cumulé` seul ne se vérifie pas. Le panneau affiche maintenant le réalisé
+(solde − capital initial) et le latent (équité − solde) séparément. La
+décomposition est exacte par construction du moteur : le solde ne contient que
+du réalisé, l'équité vaut solde plus latent. Chacun se recoupe avec le journal
+des placements, dont les totaux suivent le filtre actif — filtrer sur
+« Agents » donne le résultat des agents, pas celui du compte entier.
+
+### Le journal des placements vit sous le graphique
+
+C'est la lecture naturelle : on regarde le prix, puis ce qu'on en a fait. Chaque
+ligne est un fait mesuré — prix d'entrée, prix de sortie, résultat net de
+commissions et de swaps — et le motif de sortie dit qui a décidé : stop touché,
+cible atteinte, liquidation par manque de marge, fermeture à la main. Les
+positions des agents et celles de l'utilisateur portent une étiquette
+distincte : sans elle, impossible de savoir d'où vient le résultat du mois.
+
+### Le périmètre se règle pour toute la firme d'un geste
+
+Le réglage par agent existait déjà dans la console. Il répondait mal à la
+question la plus fréquente — « sur quoi mes agents ont-ils le droit de
+trader ? » — qui aurait demandé douze menus pour exprimer « seulement le
+Forex ». Le sélecteur de marchés de la salle des marchés applique le périmètre
+à tous les agents en une fois.
+
+Aucune classe cochée signifie « aucune restriction », pas « rien n'est
+autorisé » : c'est la convention de `evaluerPermission`, et l'inverser ici
+donnerait deux sémantiques à la même colonne. L'interface le dit en toutes
+lettres.
+
+### La veille tourne sur les instruments, un par tour
+
+Le pilote automatique ne surveille plus le seul symbole affiché : il fait le
+tour du périmètre autorisé. Un instrument par tour et non tous d'un coup —
+quatre délibérations simultanées dépasseraient le budget d'une seule et la
+durée maximale d'une requête. Le rythme reste dicté par la bougie : chaque
+instrument est analysé au plus une fois par bougie fermée.
+
+---
+
 ## Limites annoncées franchement (phase 4b)
 
 ### Quinze ans d'historique : oui en simulé, non en données réelles

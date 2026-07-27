@@ -200,6 +200,64 @@ export async function definirPerimetre(
   };
 }
 
+/**
+ * Périmètre appliqué à toute la firme d'un coup.
+ *
+ * Le réglage par agent existe déjà dans la console ; celui-ci répond à une
+ * question plus simple et beaucoup plus fréquente : « sur quoi mes agents
+ * ont-ils le droit de trader ? ». Douze menus pour exprimer « seulement le
+ * Forex » est une corvée que personne ne fera.
+ *
+ * Une liste vide veut dire « aucune restriction » et non « rien n'est
+ * autorisé » : c'est la convention de `evaluerPermission`, on ne l'inverse pas
+ * ici sous peine d'avoir deux sémantiques pour la même colonne.
+ */
+export async function definirPerimetreFirme(
+  classes: readonly string[],
+  symboles: readonly string[],
+): Promise<ResultatAgent> {
+  const ctx = await contexte();
+  if (!ctx) return { ok: false, message: 'Session expirée.' };
+
+  const classesValides = classes.filter((classe) =>
+    (CLASSES as readonly string[]).includes(classe),
+  ) as ('FOREX' | 'INDICE' | 'ACTION' | 'CRYPTO' | 'MATIERE_PREMIERE')[];
+
+  const symbolesValides = symboles
+    .map((symbole) => symbole.trim().toUpperCase())
+    .filter((symbole) => /^[A-Z0-9]{1,20}$/.test(symbole));
+
+  const { data, error } = await ctx.supabase
+    .from('permissions_agents')
+    .update({ classes_autorisees: classesValides, symboles_autorises: symbolesValides })
+    .eq('profil_id', ctx.profilId)
+    .select('agent_id');
+
+  if (error) return { ok: false, message: messageErreur(error) };
+
+  await ctx.supabase.from('journal_audit').insert({
+    profil_id: ctx.profilId,
+    acteur: 'utilisateur',
+    action: 'PERIMETRE_FIRME',
+    entite: 'permissions_agents',
+    entite_id: null,
+    details: { classes: classesValides, symboles: symbolesValides },
+  });
+
+  revalidatePath('/agents');
+  revalidatePath('/salle-des-marches');
+
+  return {
+    ok: true,
+    message:
+      classesValides.length === 0
+        ? `Aucune restriction : les ${data?.length ?? 0} agents peuvent traiter tous les instruments actifs.`
+        : `${data?.length ?? 0} agent(s) limités à : ${classesValides.join(', ')}${
+            symbolesValides.length > 0 ? ` (${symbolesValides.join(', ')})` : ''
+          }.`,
+  };
+}
+
 export async function suspendreAgent(agentId: string, minutes: number): Promise<ResultatAgent> {
   const ctx = await contexte();
   if (!ctx) return { ok: false, message: 'Session expirée.' };

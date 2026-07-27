@@ -5,7 +5,11 @@ import { z } from 'zod';
 
 import { contexteDepuisMarche, lireParametresRisque } from '@/lib/execution/contexte-serveur';
 import { fermerManuellement, traiterBougie } from '@/lib/execution/moteur';
-import { appliquerResultat, chargerEtat } from '@/lib/execution/persistance';
+import {
+  appliquerResultat,
+  chargerEtat,
+  reevaluerOuvertes,
+} from '@/lib/execution/persistance';
 import type { ContexteBougie } from '@/lib/execution/types';
 import { estIntervalle } from '@/lib/marche/intervalles';
 import type { Intervalle } from '@/lib/marche/types';
@@ -205,6 +209,18 @@ export async function avancerMarche(symbole: string, intervalle: string): Promis
   }
 
   const derniere = aTraiter[aTraiter.length - 1]!;
+
+  // Réévaluation systématique, événement ou pas : une position détenue pendant
+  // cent bougies calmes doit voir son latent bouger avec le prix. Sans cet
+  // appel, l'écran affichait 0,00 $ de latent en permanence.
+  const contexteFinal: ContexteBougie = { ...marche.contexte, bougie: derniere };
+  await reevaluerOuvertes(
+    client,
+    contexteFinal,
+    marche.contexte.tauxCotationVersCompte,
+    etat.positions,
+  );
+
   await client
     .from('portefeuilles')
     .update({

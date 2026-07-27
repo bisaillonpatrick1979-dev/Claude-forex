@@ -257,6 +257,57 @@ export async function veiller(
   };
 }
 
+/**
+ * Instruments que les agents ont le droit de traiter.
+ *
+ * Croisement du périmètre déclaré dans les permissions et des symboles
+ * réellement actifs. Une classe autorisée sans symbole actif ne produit rien,
+ * et c'est mieux que de faire tourner une veille sur un instrument dont aucune
+ * donnée n'arrivera jamais.
+ */
+export async function instrumentsSurveilles(): Promise<
+  readonly { code: string; classeActif: string }[]
+> {
+  const profilId = await profilAuthentifie();
+  if (!profilId) return [];
+
+  const client = clientAdminOptionnel();
+  if (!client) return [];
+
+  const [{ data: permissions }, { data: symboles }] = await Promise.all([
+    client
+      .from('permissions_agents')
+      .select('classes_autorisees, symboles_autorises, niveau')
+      .eq('profil_id', profilId)
+      .in('niveau', ['PROPOSITION', 'AUTONOME']),
+    client.from('symboles').select('code, classe_actif').eq('actif', true).order('code'),
+  ]);
+
+  const classes = new Set<string>();
+  const codes = new Set<string>();
+  let sansRestriction = false;
+
+  for (const permission of permissions ?? []) {
+    const sesClasses = permission.classes_autorisees ?? [];
+    const sesSymboles = permission.symboles_autorises ?? [];
+    // Convention de `evaluerPermission` : liste vide = aucune restriction.
+    if (sesClasses.length === 0 && sesSymboles.length === 0) sansRestriction = true;
+    for (const classe of sesClasses) classes.add(classe);
+    for (const code of sesSymboles) codes.add(code);
+  }
+
+  const tous = (symboles ?? []).map((ligne) => ({
+    code: ligne.code,
+    classeActif: ligne.classe_actif as string,
+  }));
+
+  if (sansRestriction || (classes.size === 0 && codes.size === 0)) return tous;
+
+  return tous.filter(
+    (symbole) => classes.has(symbole.classeActif) || codes.has(symbole.code),
+  );
+}
+
 export interface ResultatDebrief {
   readonly ok: boolean;
   readonly message: string;
