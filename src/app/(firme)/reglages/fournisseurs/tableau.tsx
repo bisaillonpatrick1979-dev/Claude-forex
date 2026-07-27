@@ -48,7 +48,7 @@ export function TableauFournisseurs({
       {fournisseurs.map((ligne) => (
         <CarteFournisseur key={ligne.code} ligne={ligne} />
       ))}
-      <p className="text-[11px] leading-relaxed text-texte-attenue">
+      <p className="text-xs leading-relaxed text-texte-attenue">
         Priorité 1 = essayé en premier pour cette classe d’actifs ; vide = fournisseur non
         éligible. Le routeur écarte de lui-même un fournisseur dont le quota est épuisé, dont la
         clé manque, ou qui ne publie pas l’intervalle demandé.
@@ -80,9 +80,9 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
         <div className="min-w-40">
           <div className="flex items-center gap-2">
             <span className="text-sm">{ligne.nom}</span>
-            <span className="chiffre text-[11px] text-texte-attenue">{ligne.code}</span>
+            <span className="chiffre text-xs text-texte-attenue">{ligne.code}</span>
           </div>
-          <p className="chiffre mt-0.5 text-[11px] text-texte-attenue">
+          <p className="chiffre mt-0.5 text-xs text-texte-attenue">
             {ligne.implemente
               ? `${ligne.intervalles.join(' ')} · quota ${quota}`
               : 'adaptateur non livré'}
@@ -95,7 +95,7 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
             type="button"
             disabled={enCours || !ligne.implemente}
             onClick={() => executer(() => testerFournisseur(ligne.code))}
-            className="rounded border border-bordure px-2 py-1 text-[11px] text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+            className="rounded border border-bordure px-2 py-1 text-xs text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
           >
             Tester
           </button>
@@ -103,7 +103,7 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
             type="button"
             disabled={enCours || !ligne.implemente}
             onClick={() => executer(() => basculerFournisseur(ligne.code, !ligne.actif))}
-            className="rounded border border-bordure px-2 py-1 text-[11px] text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+            className="rounded border border-bordure px-2 py-1 text-xs text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
           >
             {ligne.actif ? 'Désactiver' : 'Activer'}
           </button>
@@ -130,7 +130,7 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
                 return resultat;
               })
             }
-            className="rounded bg-accent px-2.5 py-1.5 text-[11px] font-medium text-fond disabled:opacity-40"
+            className="rounded bg-accent px-2.5 py-1.5 text-xs font-medium text-fond disabled:opacity-40"
           >
             Enregistrer
           </button>
@@ -139,7 +139,7 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
               type="button"
               disabled={enCours}
               onClick={() => executer(() => supprimerCleFournisseur(ligne.code))}
-              className="text-[11px] text-texte-attenue underline-offset-4 hover:underline disabled:opacity-40"
+              className="text-xs text-texte-attenue underline-offset-4 hover:underline disabled:opacity-40"
             >
               Retirer
             </button>
@@ -150,7 +150,7 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {CLASSES.map((classe) => (
           <label key={classe} className="flex items-center gap-1.5">
-            <span className="chiffre text-[10px] uppercase tracking-wider text-texte-attenue">
+            <span className="chiffre text-[0.72rem] uppercase tracking-wider text-texte-attenue">
               {ABREGE_CLASSE[classe]}
             </span>
             <input
@@ -174,7 +174,7 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
 
       {message ? (
         <p
-          className={`mt-2 text-[11px] ${message.ok ? 'text-texte-attenue' : 'text-baisse'}`}
+          className={`mt-2 text-xs ${message.ok ? 'text-texte-attenue' : 'text-baisse'}`}
           role={message.ok ? undefined : 'alert'}
         >
           {message.texte}
@@ -182,7 +182,7 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
       ) : null}
 
       {ligne.derniereErreur ? (
-        <p className="chiffre mt-2 text-[11px] text-baisse">
+        <p className="chiffre mt-2 text-xs text-baisse">
           Dernière erreur : {ligne.derniereErreur}
         </p>
       ) : null}
@@ -206,6 +206,6 @@ function Etat({ ligne }: { ligne: LigneFournisseur }) {
             : ['actif, jamais testé', 'text-texte-attenue'];
 
   return (
-    <span className={`chiffre text-[11px] uppercase tracking-wider ${classe}`}>{texte}</span>
+    <span className={`chiffre text-xs uppercase tracking-wider ${classe}`}>{texte}</span>
   );
 }

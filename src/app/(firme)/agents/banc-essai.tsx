@@ -78,7 +78,7 @@ export function BancEssai({
     <Panneau titre="Banc d’essai — faire proposer un agent">
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] text-texte-attenue">Agent</span>
+          <span className="text-[0.72rem] text-texte-attenue">Agent</span>
           <select
             value={agentCle}
             onChange={(evenement) => setAgentCle(evenement.target.value)}
@@ -93,7 +93,7 @@ export function BancEssai({
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] text-texte-attenue">Instrument</span>
+          <span className="text-[0.72rem] text-texte-attenue">Instrument</span>
           <select
             value={symbole}
             onChange={(evenement) => setSymbole(evenement.target.value)}
@@ -108,7 +108,7 @@ export function BancEssai({
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] text-texte-attenue">Intervalle</span>
+          <span className="text-[0.72rem] text-texte-attenue">Intervalle</span>
           <select
             value={intervalle}
             onChange={(evenement) =>
@@ -131,7 +131,7 @@ export function BancEssai({
               type="button"
               onClick={() => setSens(option)}
               className={[
-                'chiffre rounded px-2.5 py-1.5 text-[11px] uppercase tracking-wider transition-colors',
+                'chiffre rounded px-2.5 py-1.5 text-xs uppercase tracking-wider transition-colors',
                 sens === option
                   ? option === 'ACHAT'
                     ? 'bg-hausse/20 text-hausse'
@@ -151,7 +151,7 @@ export function BancEssai({
           { libelle: 'Confiance', valeur: confiance, definir: setConfiance, pas: '5' },
         ].map((champ) => (
           <label key={champ.libelle} className="flex flex-col gap-1">
-            <span className="text-[10px] text-texte-attenue">{champ.libelle}</span>
+            <span className="text-[0.72rem] text-texte-attenue">{champ.libelle}</span>
             <input
               type="number"
               step={champ.pas}
@@ -166,13 +166,13 @@ export function BancEssai({
           type="button"
           disabled={enCours || agentCle === ''}
           onClick={soumettre}
-          className="rounded bg-accent px-3 py-1.5 text-[11px] font-medium text-fond disabled:opacity-40"
+          className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-fond disabled:opacity-40"
         >
           {enCours ? 'Évaluation…' : 'Soumettre'}
         </button>
       </div>
 
-      <p className="mt-2 text-[11px] leading-relaxed text-texte-attenue">
+      <p className="mt-2 text-xs leading-relaxed text-texte-attenue">
         Sans stop-loss, l’ordre est rejeté par les garde-fous : c’est voulu, et c’est un bon
         premier test. La proposition traverse le même chemin que celui de l’orchestrateur et
         laisse les mêmes traces dans l’historique.
@@ -188,7 +188,7 @@ export function BancEssai({
               {resultat.controles.map((controle, index) => (
                 <li
                   key={`${controle.origine}-${controle.code}-${index}`}
-                  className="chiffre flex flex-wrap items-baseline gap-2 text-[11px]"
+                  className="chiffre flex flex-wrap items-baseline gap-2 text-xs"
                 >
                   <span className="text-texte-attenue">
                     {controle.origine === 'PERMISSION' ? 'droit' : 'risque'}

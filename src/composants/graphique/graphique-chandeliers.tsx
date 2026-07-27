@@ -346,7 +346,7 @@ export function GraphiqueChandeliers({
 
       {survol ? (
         <div className="pointer-events-none absolute left-2 top-2 rounded border border-bordure bg-panneau/90 px-2 py-1.5 backdrop-blur-sm">
-          <div className="chiffre flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+          <div className="chiffre flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
             <Valeur libelle="O" valeur={survol.chandelier.ouverture} decimales={decimales} />
             <Valeur libelle="H" valeur={survol.chandelier.haut} decimales={decimales} />
             <Valeur libelle="B" valeur={survol.chandelier.bas} decimales={decimales} />
@@ -358,7 +358,7 @@ export function GraphiqueChandeliers({
             ) : null}
           </div>
           {survol.marqueur ? (
-            <p className="mt-1 max-w-72 border-t border-bordure pt-1 text-[11px] leading-snug text-texte-attenue">
+            <p className="mt-1 max-w-72 border-t border-bordure pt-1 text-xs leading-snug text-texte-attenue">
               {survol.marqueur.raisonnement}
             </p>
           ) : null}

@@ -94,12 +94,12 @@ function CarteProposition({ proposition }: { proposition: PropositionAffichee })
             </span>
             <span className="chiffre text-sm">{proposition.symbole}</span>
             <span className="chiffre text-sm">{proposition.quantite} lot(s)</span>
-            <span className="chiffre text-[11px] text-texte-attenue">
+            <span className="chiffre text-xs text-texte-attenue">
               {proposition.type}
               {proposition.intervalle ? ` · ${proposition.intervalle}` : ''}
             </span>
           </div>
-          <p className="chiffre mt-1 text-[11px] text-texte-attenue">
+          <p className="chiffre mt-1 text-xs text-texte-attenue">
             proposé par {proposition.agent} ·{' '}
             {new Date(proposition.creeLe).toLocaleTimeString('fr-CA', {
               hour: '2-digit',
@@ -114,7 +114,7 @@ function CarteProposition({ proposition }: { proposition: PropositionAffichee })
           </p>
         </div>
 
-        <dl className="chiffre flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+        <dl className="chiffre flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {[
             ['Entrée', proposition.prixEntree],
             ['Stop', proposition.stopLoss],
@@ -139,7 +139,7 @@ function CarteProposition({ proposition }: { proposition: PropositionAffichee })
             type="button"
             disabled={enCours || expiree}
             onClick={() => executer(() => approuverProposition(proposition.id))}
-            className="rounded bg-accent px-3 py-1.5 text-[11px] font-medium text-fond disabled:opacity-40"
+            className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-fond disabled:opacity-40"
           >
             Approuver
           </button>
@@ -147,7 +147,7 @@ function CarteProposition({ proposition }: { proposition: PropositionAffichee })
             type="button"
             disabled={enCours}
             onClick={() => executer(() => refuserProposition(proposition.id))}
-            className="rounded border border-bordure px-3 py-1.5 text-[11px] text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+            className="rounded border border-bordure px-3 py-1.5 text-xs text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
           >
             Refuser
           </button>
@@ -157,20 +157,20 @@ function CarteProposition({ proposition }: { proposition: PropositionAffichee })
       <p className="mt-2 text-xs leading-relaxed text-texte-attenue">{proposition.raisonnement}</p>
 
       {proposition.risque ? (
-        <p className="chiffre mt-1 text-[11px] text-texte-attenue">
+        <p className="chiffre mt-1 text-xs text-texte-attenue">
           Contrôle de risque à la proposition : {proposition.risque.decision} —{' '}
           {proposition.risque.raison}
         </p>
       ) : null}
 
-      <p className="mt-2 text-[11px] text-texte-attenue">
+      <p className="mt-2 text-xs text-texte-attenue">
         L’approbation refait le contrôle de risque sur le prix du moment : la taille exécutée peut
         être plus petite que celle proposée.
       </p>
 
       {resultat ? (
         <p
-          className={`mt-2 text-[11px] ${resultat.ok ? 'text-texte' : 'text-baisse'}`}
+          className={`mt-2 text-xs ${resultat.ok ? 'text-texte' : 'text-baisse'}`}
           role={resultat.ok ? 'status' : 'alert'}
         >
           {resultat.message}

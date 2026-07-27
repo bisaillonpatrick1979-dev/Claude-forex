@@ -32,6 +32,28 @@ html {
   color-scheme: dark;
 }
 
+/*
+ * Densité adaptée à la taille réelle de l'écran.
+ *
+ * La salle des marchés est dense par nature : sur un écran de bureau on veut
+ * voir le graphique, le fil et le portefeuille d'un seul coup d'œil. Sur une
+ * tablette en paysage, cette même densité rend les libellés illisibles.
+ *
+ * Toutes les tailles de texte de l'application sont exprimées en rem, donc
+ * relever la taille de base ici agrandit tout d'un coup, sans toucher à
+ * cent vingt classes une par une. En dessous de 1280 px on desserre ; à
+ * partir de là, on retrouve la densité voulue.
+ */
+html {
+  font-size: 18px;
+}
+
+@media (min-width: 1280px) {
+  html {
+    font-size: 16px;
+  }
+}
+
 body {
   background-color: var(--color-fond);
   color: var(--color-texte);

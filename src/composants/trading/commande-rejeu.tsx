@@ -30,13 +30,28 @@ export interface EtatRejeu {
   readonly source: string | null;
 }
 
-/** Cadences proposées. « bougies par seconde », pas un multiplicateur de temps :
- *  un ×100 ne veut rien dire quand l'intervalle change. */
-const VITESSES: readonly { libelle: string; parSeconde: number; parAppel: number }[] = [
-  { libelle: '1×', parSeconde: 1, parAppel: 1 },
-  { libelle: '10×', parSeconde: 5, parAppel: 2 },
-  { libelle: '60×', parSeconde: 6, parAppel: 10 },
-  { libelle: 'Max', parSeconde: 8, parAppel: 60 },
+/**
+ * Cadences proposées, exprimées en bougies traitées par seconde.
+ *
+ * Pas en « multiplicateur de temps » : un ×100 ne veut rien dire quand
+ * l'intervalle change — cent fois plus vite sur du M1 et sur du D1, ce ne sont
+ * pas les mêmes ordres de grandeur. En bougies par seconde, le chiffre garde
+ * le même sens partout.
+ *
+ * `parAppel` est plafonné à 500 côté serveur : au-delà, la fonction dépasse la
+ * durée maximale d'exécution et le lot entier est perdu. Pour aller plus vite,
+ * on appelle plus souvent, pas plus gros.
+ *
+ * Repère concret en « Éclair » : environ 4 000 bougies par seconde, soit un an
+ * de H1 (~6 200 bougies) en moins de deux secondes, ou quinze ans de D1
+ * (~3 900 bougies) en une seconde.
+ */
+const VITESSES: readonly { libelle: string; detail: string; parSeconde: number; parAppel: number }[] = [
+  { libelle: 'Pas à pas', detail: '1 bougie/s', parSeconde: 1, parAppel: 1 },
+  { libelle: 'Lent', detail: '~10 bougies/s', parSeconde: 5, parAppel: 2 },
+  { libelle: 'Rapide', detail: '~250 bougies/s', parSeconde: 5, parAppel: 50 },
+  { libelle: 'Très rapide', detail: '~1 500 bougies/s', parSeconde: 6, parAppel: 250 },
+  { libelle: 'Éclair', detail: '~4 000 bougies/s', parSeconde: 8, parAppel: 500 },
 ];
 
 const PROFONDEURS: readonly { libelle: string; jours: number }[] = [
@@ -62,7 +77,7 @@ export function CommandeRejeu({
   const router = useRouter();
   const [source, setSource] = useState<SourceRejeu>((etat.source as SourceRejeu) ?? 'SIMULE');
   const [jours, setJours] = useState(365);
-  const [vitesse, setVitesse] = useState(1);
+  const [vitesse, setVitesse] = useState(2);
   const [enLecture, setEnLecture] = useState(false);
   const [retour, setRetour] = useState<string | null>(null);
   const [curseur, setCurseur] = useState<number | null>(etat.curseur);
@@ -159,7 +174,7 @@ export function CommandeRejeu({
           </select>
         </div>
 
-        <p className="chiffre text-[10px] leading-tight text-texte-attenue/70">
+        <p className="chiffre text-[0.72rem] leading-tight text-texte-attenue/70">
           {source === 'SIMULE'
             ? 'Série déterministe calculée localement : profondeur illimitée, mais ce n’est pas le vrai marché. Banc d’essai du moteur et des agents, pas une performance passée.'
             : `Vraies bougies, dans la limite du fournisseur : environ ${plafond} jours en ${intervalle}. Aucun trou n’est comblé par de la donnée inventée.`}
@@ -175,7 +190,7 @@ export function CommandeRejeu({
         </button>
 
         {retour ? (
-          <p className="rounded border border-bordure bg-panneau-clair px-2 py-1 text-[11px] text-texte-attenue">
+          <p className="rounded border border-bordure bg-panneau-clair px-2 py-1 text-xs text-texte-attenue">
             {retour}
           </p>
         ) : null}
@@ -190,7 +205,7 @@ export function CommandeRejeu({
 
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <p className="rounded border border-alerte/40 bg-alerte/10 px-2 py-1 text-[11px] text-alerte">
+      <p className="rounded border border-alerte/40 bg-alerte/10 px-2 py-1 text-xs text-alerte">
         Rejeu en cours sur {etat.symbole} — le portefeuille vit au{' '}
         {dateLisible(curseur ?? etat.curseur)} UTC, pas au présent.
       </p>
@@ -198,26 +213,36 @@ export function CommandeRejeu({
       <div className="h-1 w-full overflow-hidden rounded bg-panneau-clair">
         <div className="h-full bg-accent transition-all" style={{ width: `${pourcentage}%` }} />
       </div>
-      <p className="chiffre text-[10px] text-texte-attenue">
+      <p className="chiffre text-[0.72rem] text-texte-attenue">
         {progression ? `${progression.faites} / ${progression.total} bougies` : '—'} · jusqu’au{' '}
         {dateLisible(etat.fin)}
       </p>
 
-      <div className="flex gap-1">
-        {VITESSES.map((option, index) => (
-          <button
-            key={option.libelle}
-            type="button"
-            onClick={() => setVitesse(index)}
-            className={`chiffre flex-1 rounded border px-1 py-1 text-[10px] transition ${
-              vitesse === index
-                ? 'border-accent text-accent'
-                : 'border-bordure text-texte-attenue hover:border-bordure-vive'
-            }`}
-          >
-            {option.libelle}
-          </button>
-        ))}
+      <div>
+        <p className="mb-1 text-xs text-texte-attenue">
+          Vitesse de défilement — plus vite les bougies passent, plus vite les agents accumulent
+          des positions fermées à débriefer.
+        </p>
+        <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
+          {VITESSES.map((option, index) => (
+            <button
+              key={option.libelle}
+              type="button"
+              onClick={() => setVitesse(index)}
+              title={option.detail}
+              className={`rounded border px-1.5 py-1.5 text-xs leading-tight transition ${
+                vitesse === index
+                  ? 'border-accent text-accent'
+                  : 'border-bordure text-texte-attenue hover:border-bordure-vive'
+              }`}
+            >
+              {option.libelle}
+            </button>
+          ))}
+        </div>
+        <p className="chiffre mt-1 text-[0.72rem] text-texte-attenue/70">
+          {VITESSES[vitesse]?.detail ?? ''}
+        </p>
       </div>
 
       <div className="flex gap-2">
@@ -254,7 +279,7 @@ export function CommandeRejeu({
       </div>
 
       {retour ? (
-        <p className="rounded border border-bordure bg-panneau-clair px-2 py-1 text-[11px] text-texte-attenue">
+        <p className="rounded border border-bordure bg-panneau-clair px-2 py-1 text-xs text-texte-attenue">
           {retour}
         </p>
       ) : null}

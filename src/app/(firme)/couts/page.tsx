@@ -27,7 +27,7 @@ export default async function PageCouts() {
             <span className="text-xs text-texte-attenue">Plafond configuré</span>
             <span className="chiffre text-sm">{formaterMonnaie(plafond)}</span>
           </div>
-          <p className="mt-3 text-[11px] text-texte-attenue">
+          <p className="mt-3 text-xs text-texte-attenue">
             Édition du plafond et détail par agent : phase 6. L’adaptateur LLM « mock » permet de
             faire tourner un cycle complet sans dépenser un sou.
           </p>

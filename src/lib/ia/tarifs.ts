@@ -33,6 +33,12 @@ export const TARIFS: Readonly<Record<string, Tarif>> = {
   // Google
   'gemini-2.5-pro': { entree: 1.25, sortie: 10 },
   'gemini-2.5-flash': { entree: 0.3, sortie: 2.5 },
+  // DeepSeek
+  'deepseek-chat': { entree: 0.27, sortie: 1.1 },
+  'deepseek-reasoner': { entree: 0.55, sortie: 2.19 },
+  // Mistral
+  'mistral-large-latest': { entree: 2, sortie: 6 },
+  'mistral-small-latest': { entree: 0.2, sortie: 0.6 },
   // Interne
   'mock-1': { entree: 0, sortie: 0 },
 };
@@ -57,6 +63,8 @@ export const MODELES_PAR_FOURNISSEUR: Readonly<Record<FournisseurLLM, readonly s
   anthropic: ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
   openai: ['gpt-5.1', 'gpt-5.1-mini', 'gpt-4.1-mini'],
   google: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  mistral: ['mistral-large-latest', 'mistral-small-latest'],
   mock: ['mock-1'],
 };
 

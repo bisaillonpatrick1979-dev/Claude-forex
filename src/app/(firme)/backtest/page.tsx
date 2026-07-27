@@ -15,7 +15,7 @@ export default function PageBacktest() {
           message="Aucun backtest lancé."
           phase="Backtest et comparateurs — phase 6"
         />
-        <p className="mx-auto mt-4 max-w-md text-center text-[11px] leading-relaxed text-texte-attenue">
+        <p className="mx-auto mt-4 max-w-md text-center text-xs leading-relaxed text-texte-attenue">
           Chaque résultat sera affiché à côté de deux références : achat-conservation sur le même
           instrument, et une stratégie aléatoire de même fréquence. Si le système ne les bat pas,
           l’écran le dira.

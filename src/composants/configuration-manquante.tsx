@@ -10,7 +10,7 @@ export function ConfigurationManquante({ variables }: { variables: readonly stri
   return (
     <main className="flex min-h-dvh items-center justify-center p-6">
       <div className="w-full max-w-lg rounded-lg border border-bordure bg-panneau p-5">
-        <p className="chiffre text-[11px] uppercase tracking-[0.2em] text-texte-attenue">
+        <p className="chiffre text-xs uppercase tracking-[0.2em] text-texte-attenue">
           Trading Floor IA
         </p>
         <h1 className="mt-2 text-lg font-semibold text-alerte">Configuration incomplète</h1>

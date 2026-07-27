@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { ROLES_EXECUTANTS } from '@/lib/agents/niveaux';
+import { estFournisseurLLM } from '@/lib/ia';
 import { clientServeur } from '@/lib/supabase/serveur';
 import { profilAuthentifie } from '@/lib/supabase/session';
 
@@ -348,7 +349,7 @@ async function idsExecutants(ctx: { profilId: string; supabase: Awaited<ReturnTy
 }
 
 const schemaModele = z.object({
-  fournisseur: z.enum(['anthropic', 'openai', 'google', 'mock']),
+  fournisseur: z.string().refine(estFournisseurLLM, 'Fournisseur inconnu.'),
   modele: z.string().min(1).max(80),
   temperature: z.coerce.number().min(0).max(2),
   tokensMax: z.coerce.number().int().min(256).max(32_000),

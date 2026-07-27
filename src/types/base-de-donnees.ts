@@ -1900,7 +1900,13 @@ export type Database = {
         | "ECHOUE"
         | "ABANDONNE"
       fenetre_quota: "MINUTE" | "HEURE" | "JOUR" | "MOIS"
-      fournisseur_llm: "anthropic" | "openai" | "google" | "mock"
+      fournisseur_llm:
+        | "anthropic"
+        | "openai"
+        | "google"
+        | "mock"
+        | "deepseek"
+        | "mistral"
       intervalle: "M1" | "M5" | "M15" | "M30" | "H1" | "H4" | "D1" | "W1"
       mode_operation:
         | "PAPIER_AUTONOME"
@@ -2100,7 +2106,14 @@ export const Constants = {
         "ABANDONNE",
       ],
       fenetre_quota: ["MINUTE", "HEURE", "JOUR", "MOIS"],
-      fournisseur_llm: ["anthropic", "openai", "google", "mock"],
+      fournisseur_llm: [
+        "anthropic",
+        "openai",
+        "google",
+        "mock",
+        "deepseek",
+        "mistral",
+      ],
       intervalle: ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"],
       mode_operation: [
         "PAPIER_AUTONOME",

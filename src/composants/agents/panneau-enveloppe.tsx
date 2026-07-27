@@ -89,13 +89,13 @@ export function PanneauEnveloppe({
             Confier
           </button>
         </div>
-        <p className="chiffre mt-1 text-[10px] text-texte-attenue/70">
+        <p className="chiffre mt-1 text-[0.72rem] text-texte-attenue/70">
           Équité du compte : {formaterMonnaie(equiteCompte, devise)}. Les agents dimensionnent
           leurs positions sur l’enveloppe, pas sur le compte entier.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2.5">
         <Cellule
           libelle="Profits réalisés"
           valeur={formaterMonnaie(enveloppe.profitsRealises, devise)}
@@ -118,7 +118,7 @@ export function PanneauEnveloppe({
         />
       </div>
 
-      <p className="chiffre text-[10px] text-texte-attenue/70">
+      <p className="chiffre text-[0.72rem] text-texte-attenue/70">
         Variation depuis l’allocation : {formaterPourcentage(enveloppe.variationPct)} · marge
         engagée {formaterMonnaie(enveloppe.margeEngagee, devise)}. Le latent vaut au dernier
         horodatage traité par le moteur, pas à la seconde présente.
@@ -153,7 +153,7 @@ export function PanneauEnveloppe({
       </div>
 
       {retour ? (
-        <p className="rounded border border-bordure bg-panneau-clair px-2 py-1 text-[11px] text-texte-attenue">
+        <p className="rounded border border-bordure bg-panneau-clair px-2 py-1 text-xs text-texte-attenue">
           {retour}
         </p>
       ) : null}
@@ -171,9 +171,9 @@ function Cellule({
   classe: string;
 }) {
   return (
-    <div className="rounded border border-bordure bg-panneau-clair px-2 py-1.5">
-      <p className="text-[10px] leading-tight text-texte-attenue">{libelle}</p>
-      <p className={`chiffre mt-0.5 text-sm ${classe}`}>{valeur}</p>
+    <div className="rounded border border-bordure bg-panneau-clair px-3 py-2.5">
+      <p className="text-xs leading-snug text-texte-attenue">{libelle}</p>
+      <p className={`chiffre mt-1 text-base ${classe}`}>{valeur}</p>
     </div>
   );
 }

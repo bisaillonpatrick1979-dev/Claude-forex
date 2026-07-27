@@ -63,9 +63,18 @@ export function Atelier({
   const decimales = symboles.find((option) => option.code === symbole)?.decimales ?? 5;
 
   return (
-    <div className="grid min-h-0 gap-3 xl:h-full xl:grid-cols-[minmax(0,19rem)_minmax(0,1fr)_minmax(0,22rem)]">
-      <div className="flex min-h-0 flex-col gap-3">
+    // L'ordre visuel diffère selon la largeur. Sur grand écran, les trois
+    // colonnes sont côte à côte et l'ordre du DOM convient. Empilé — tablette
+    // comprise — on veut le graphique puis les agents en premier : ce sont eux
+    // qu'on regarde, pas le billet d'ordre. `order` évite de dupliquer le
+    // balisage pour obtenir deux dispositions.
+    <div className="grid gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,24rem)]">
+      <div className="order-3 flex flex-col gap-3 xl:order-1 xl:min-h-0">
         {panneauFirme}
+
+        <Panneau titre="Rejeu historique et vitesse">
+          <CommandeRejeu etat={rejeu} symbole={symbole} intervalle={intervalle} />
+        </Panneau>
 
         <Panneau titre="Passer un ordre">
           <BilletOrdre
@@ -85,16 +94,12 @@ export function Atelier({
           />
         </Panneau>
 
-        <Panneau titre="Rejeu historique">
-          <CommandeRejeu etat={rejeu} symbole={symbole} intervalle={intervalle} />
-        </Panneau>
-
         <Panneau titre="Ordres en attente">
           <OrdresEnAttente ordres={ordres} symboleCourant={symbole} intervalle={intervalle} />
         </Panneau>
       </div>
 
-      <section className="flex min-h-96 flex-col overflow-hidden rounded-lg border border-bordure bg-panneau xl:min-h-0">
+      <section className="order-1 flex h-[60vh] min-h-96 flex-col overflow-hidden rounded-lg border border-bordure bg-panneau xl:order-2 xl:h-auto xl:min-h-0">
         <ZoneGraphique
           symboles={symboles}
           marqueurs={marqueurs}
@@ -106,10 +111,10 @@ export function Atelier({
         />
       </section>
 
-      <div className="flex min-h-0 flex-col gap-3">
+      <div className="order-2 flex flex-col gap-3 xl:order-3 xl:min-h-0">
         {panneauAgents}
 
-        <Panneau titre="Fil des spécialistes" className="min-h-80 flex-1 xl:min-h-0">
+        <Panneau titre="Fil des spécialistes" className="flex-1 xl:min-h-0" defilement>
           <FilSpecialistes
             profilId={profilId}
             symbole={symbole}

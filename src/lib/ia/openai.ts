@@ -5,6 +5,7 @@ import {
   type AdaptateurLLM,
   type ContexteAppelLLM,
   type DemandeLLM,
+  type FournisseurLLM,
   type ReponseLLM,
 } from './types';
 
@@ -17,6 +18,15 @@ import {
  * streaming ou des outils côté OpenAI, ce fichier sera remplacé par le SDK.
  */
 
+/**
+ * DeepSeek et Mistral exposent la même API que /v1/chat/completions : mêmes
+ * routes, mêmes champs, mêmes compteurs de tokens. On partage donc
+ * l'implémentation au lieu d'écrire deux fichiers quasi identiques qui
+ * dériveraient l'un de l'autre au premier correctif.
+ *
+ * Ce qui diffère — l'URL de base, le nom affiché, la grille tarifaire — est
+ * paramétré ; le reste est commun.
+ */
 const URL_BASE = 'https://api.openai.com/v1';
 
 interface ReponseChat {
@@ -29,14 +39,19 @@ interface ReponseChat {
   readonly model?: string;
 }
 
-export const adaptateurOpenAI: AdaptateurLLM = {
-  code: 'openai',
-  nom: 'OpenAI (GPT)',
+function adaptateurCompatibleOpenAI(config: {
+  code: FournisseurLLM;
+  nom: string;
+  urlBase: string;
+}): AdaptateurLLM {
+  return {
+  code: config.code,
+  nom: config.nom,
   necessiteCle: true,
-  modeles: MODELES_PAR_FOURNISSEUR.openai,
+  modeles: MODELES_PAR_FOURNISSEUR[config.code],
 
   async appeler(demande: DemandeLLM, contexte: ContexteAppelLLM): Promise<ReponseLLM> {
-    if (!contexte.cle) throw new ErreurLLM('openai', 'Clé API OpenAI absente.');
+    if (!contexte.cle) throw new ErreurLLM(config.code, `Clé API ${config.nom} absente.`);
 
     const debut = Date.now();
     const corps: Record<string, unknown> = {
@@ -57,7 +72,7 @@ export const adaptateurOpenAI: AdaptateurLLM = {
 
     let reponse: Response;
     try {
-      reponse = await fetch(`${URL_BASE}/chat/completions`, {
+      reponse = await fetch(`${config.urlBase}/chat/completions`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -67,7 +82,7 @@ export const adaptateurOpenAI: AdaptateurLLM = {
         signal: demande.signal,
       });
     } catch {
-      throw new ErreurLLM('openai', 'Connexion à OpenAI impossible.', true);
+      throw new ErreurLLM(config.code, `Connexion à ${config.nom} impossible.`, true);
     }
 
     const donnees = (await reponse.json().catch(() => null)) as ReponseChat | null;
@@ -75,15 +90,15 @@ export const adaptateurOpenAI: AdaptateurLLM = {
     if (!reponse.ok || !donnees || donnees.error) {
       const detail = donnees?.error?.message ?? `HTTP ${reponse.status}`;
       throw new ErreurLLM(
-        'openai',
-        `OpenAI : ${detail}`,
+        config.code,
+        `${config.nom} : ${detail}`,
         reponse.status === 429 || reponse.status >= 500,
       );
     }
 
     const choix = donnees.choices?.[0];
     const contenu = (choix?.message?.content ?? '').trim();
-    if (!contenu) throw new ErreurLLM('openai', 'OpenAI a renvoyé une réponse vide.');
+    if (!contenu) throw new ErreurLLM(config.code, `${config.nom} a renvoyé une réponse vide.`);
 
     return {
       contenu,
@@ -94,7 +109,26 @@ export const adaptateurOpenAI: AdaptateurLLM = {
       tronquee: choix?.finish_reason === 'length',
     };
   },
-};
+  };
+}
+
+export const adaptateurOpenAI = adaptateurCompatibleOpenAI({
+  code: 'openai',
+  nom: 'OpenAI (GPT)',
+  urlBase: URL_BASE,
+});
+
+export const adaptateurDeepSeek = adaptateurCompatibleOpenAI({
+  code: 'deepseek',
+  nom: 'DeepSeek',
+  urlBase: 'https://api.deepseek.com/v1',
+});
+
+export const adaptateurMistral = adaptateurCompatibleOpenAI({
+  code: 'mistral',
+  nom: 'Mistral',
+  urlBase: 'https://api.mistral.ai/v1',
+});
 
 /** Embeddings OpenAI. Isolé de l'adaptateur de conversation : ce n'est ni le
  *  même endpoint, ni la même unité de facturation. */

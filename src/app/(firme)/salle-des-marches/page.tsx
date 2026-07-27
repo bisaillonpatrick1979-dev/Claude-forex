@@ -129,7 +129,7 @@ export default async function PageSalleDesMarches() {
           />
           <Ligne libelle="Drawdown" valeur={formaterPourcentage(drawdownPct)} />
           {portefeuille.gele ? (
-            <p className="rounded border border-baisse/40 bg-baisse/10 px-2 py-1 text-[11px] text-baisse">
+            <p className="rounded border border-baisse/40 bg-baisse/10 px-2 py-1 text-xs text-baisse">
               Portefeuille gelé — {portefeuille.raison_gel ?? 'kill switch'}
             </p>
           ) : null}

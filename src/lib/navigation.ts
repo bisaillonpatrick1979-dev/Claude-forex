@@ -51,10 +51,16 @@ export const NAVIGATION: readonly EntreeNavigation[] = [
     description: 'Dépense LLM par jour et par agent, plafond quotidien.',
   },
   {
+    href: '/reglages/ia',
+    libelle: 'Clés IA',
+    abrege: 'Clés IA',
+    description: 'Fournisseur de modèles utilisé par les agents, et sa clé.',
+  },
+  {
     href: '/reglages',
     libelle: 'Réglages',
     abrege: 'Réglages',
-    description: 'Fournisseurs de données, clés API, modèles LLM, limites de risque.',
+    description: 'Fournisseurs de données, limites de risque, plafond de dépense.',
   },
 ] as const;
 
