@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { raisonIndisponibilite } from '@/lib/agents/enveloppe';
 import { chargerEnveloppe } from '@/lib/agents/enveloppe-serveur';
+import { avancerTousLesInstruments } from '@/app/actions/trading';
 import { chargerInstrument } from '@/lib/execution/persistance';
 import { budgetSuffisant, etatBudget } from '@/lib/ia/budget';
 import { estIntervalle } from '@/lib/marche/intervalles';
@@ -84,12 +85,14 @@ export async function lancerCycleAgents(
     declencheur: 'MANUEL',
   });
 
+  const avance = await avancerTousLesInstruments(analyse.data.intervalle);
+
   revalidatePath('/salle-des-marches');
   revalidatePath('/validation');
 
   return {
     ok: resultat.ok,
-    message: resultat.message,
+    message: `${resultat.message} ${avance.ok ? avance.message : ''}`.trim(),
     cycleId: resultat.cycleId,
     coutUsd: resultat.coutUsd,
   };
@@ -271,12 +274,18 @@ export async function veiller(
     declencheur: 'PLANIFIE',
   });
 
+  // Le moteur avance immédiatement après la délibération : un ordre créé mais
+  // jamais rempli laisse l'enveloppe des agents à zéro alors qu'ils ont décidé.
+  // Tous les instruments sont traités, pas seulement celui de ce cycle — la
+  // veille en fait tourner une douzaine.
+  const avance = await avancerTousLesInstruments(analyse.data.intervalle);
+
   revalidatePath('/salle-des-marches');
   revalidatePath('/validation');
 
   return {
     ok: resultat.ok,
-    message: resultat.message,
+    message: `${resultat.message} ${avance.ok ? avance.message : ''}`.trim(),
     cycleId: resultat.cycleId,
     aTravaille: true,
     derniereBougie,

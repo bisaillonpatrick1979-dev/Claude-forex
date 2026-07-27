@@ -239,6 +239,145 @@ export async function avancerMarche(symbole: string, intervalle: string): Promis
   };
 }
 
+/**
+ * Fait avancer le moteur sur TOUS les instruments qui en ont besoin.
+ *
+ * `avancerMarche` ne traite que le symbole affiché — c'était suffisant quand
+ * seul l'utilisateur passait des ordres, sur l'instrument qu'il regardait. Ce
+ * ne l'est plus depuis que la veille fait travailler les agents sur une
+ * douzaine de marchés : leurs ordres s'accumulaient en attente d'une bougie
+ * qui n'arrivait jamais, et l'enveloppe des agents restait à zéro alors qu'ils
+ * avaient bel et bien décidé dix-huit fois.
+ *
+ * Les instruments retenus sont ceux qui portent un ordre en attente ou une
+ * position ouverte. Traiter les autres consommerait du quota de fournisseur
+ * pour rien.
+ *
+ * Le curseur `dernier_horodatage_traite` est global au portefeuille et non par
+ * symbole. C'est acceptable parce qu'il s'agit d'un horodatage mural : une
+ * bougie antérieure au curseur est passée pour tous les instruments. Il est
+ * écrit une seule fois, à la fin, avec le maximum atteint — l'écrire à chaque
+ * symbole ferait sauter les bougies des suivants.
+ */
+export async function avancerTousLesInstruments(
+  intervalle: string,
+): Promise<ResultatTrading> {
+  const profilId = await profilAuthentifie();
+  if (!profilId) return { ok: false, message: 'Session expirée.' };
+  if (!estIntervalle(intervalle)) return { ok: false, message: 'Intervalle inconnu.' };
+
+  const client = clientAdminOptionnel();
+  if (!client) return { ok: false, message: CONFIG_MANQUANTE };
+
+  const [{ data: enAttente }, { data: ouvertes }] = await Promise.all([
+    client
+      .from('ordres')
+      .select('symboles(code)')
+      .eq('profil_id', profilId)
+      .in('statut', ['EN_ATTENTE', 'PARTIELLEMENT_REMPLI']),
+    client
+      .from('positions')
+      .select('symboles(code)')
+      .eq('profil_id', profilId)
+      .eq('statut', 'OUVERTE'),
+  ]);
+
+  const codes = new Set<string>();
+  for (const ligne of enAttente ?? []) if (ligne.symboles?.code) codes.add(ligne.symboles.code);
+  for (const ligne of ouvertes ?? []) if (ligne.symboles?.code) codes.add(ligne.symboles.code);
+
+  if (codes.size === 0) {
+    return { ok: true, message: 'Aucun ordre en attente ni position ouverte à traiter.' };
+  }
+
+  let portefeuilleId: string | null = null;
+  let curseurMaximal = 0;
+  let bougiesTotal = 0;
+  let evenementsTotal = 0;
+  const incidents: string[] = [];
+
+  for (const code of codes) {
+    try {
+      const marche = await contexteDepuisMarche(client, profilId, code, intervalle);
+      if (!marche.ok) {
+        incidents.push(`${code} : ${marche.message}`);
+        continue;
+      }
+
+      const persiste = await chargerEtat(client, profilId, code);
+      if (!persiste) continue;
+      if (persiste.etat.portefeuille.gele) {
+        return { ok: false, message: 'Portefeuille gelé : le moteur est à l’arrêt.' };
+      }
+
+      portefeuilleId = persiste.portefeuilleId;
+      const derniereTraitee = persiste.dernierHorodatageTraite ?? 0;
+      const aTraiter = marche.chandeliers.filter(
+        (chandelier) => chandelier.horodatage > derniereTraitee,
+      );
+      if (aTraiter.length === 0) continue;
+
+      let etat = persiste.etat;
+      for (const chandelier of aTraiter) {
+        const contexte: ContexteBougie = { ...marche.contexte, bougie: chandelier };
+        const resultat = traiterBougie(etat, contexte);
+        etat = resultat.etat;
+        evenementsTotal += resultat.evenements.length;
+
+        if (resultat.evenements.length > 0 || resultat.ecritures.length > 0) {
+          await appliquerResultat(
+            client,
+            { profilId, portefeuilleId: persiste.portefeuilleId, symboleId: marche.symboleId },
+            resultat,
+            chandelier.horodatage,
+          );
+        }
+      }
+
+      const derniere = aTraiter[aTraiter.length - 1]!;
+      bougiesTotal += aTraiter.length;
+      curseurMaximal = Math.max(curseurMaximal, derniere.horodatage);
+
+      await reevaluerOuvertes(
+        client,
+        { ...marche.contexte, bougie: derniere },
+        marche.contexte.tauxCotationVersCompte,
+        etat.positions,
+      );
+
+      await client
+        .from('portefeuilles')
+        .update({
+          solde: etat.portefeuille.solde,
+          equite: etat.portefeuille.equite,
+          marge_utilisee: etat.portefeuille.margeUtilisee,
+          sommet_equite: etat.portefeuille.sommetEquite,
+        })
+        .eq('id', persiste.portefeuilleId);
+    } catch (erreur) {
+      // Un instrument indisponible ne doit pas empêcher les autres d'avancer :
+      // c'est exactement la situation où un ordre resterait bloqué sans que
+      // personne ne le sache.
+      incidents.push(`${code} : ${erreur instanceof Error ? erreur.message : 'erreur inconnue'}`);
+    }
+  }
+
+  if (portefeuilleId && curseurMaximal > 0) {
+    await client
+      .from('portefeuilles')
+      .update({ dernier_horodatage_traite: curseurMaximal })
+      .eq('id', portefeuilleId);
+  }
+
+  revalidatePath('/salle-des-marches');
+
+  const resume = `${codes.size} instrument(s), ${bougiesTotal} bougie(s), ${evenementsTotal} événement(s).`;
+  return {
+    ok: true,
+    message: incidents.length > 0 ? `${resume} Non traités — ${incidents.join(' ; ')}` : resume,
+  };
+}
+
 export async function fermerPositionManuelle(
   positionId: string,
   symbole: string,

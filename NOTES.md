@@ -1251,6 +1251,46 @@ lieu de laisser croire qu'une clé suffirait.
 
 ---
 
+## Le bug qui vidait l'enveloppe des agents
+
+Symptôme rapporté : le portefeuille bouge, l'enveloppe des agents reste à zéro.
+Diagnostic par requête sur les données réelles plutôt qu'à la lecture du code —
+et le résultat était sans ambiguïté :
+
+| Table | Constat |
+| --- | --- |
+| `cycles` | 47 terminés |
+| `propositions_ordres` | 18 acceptées, 7 rejetées par le risque |
+| `ordres` | **18 en attente**, origine AGENT ; 1 rempli, origine MANUEL |
+| `positions` | 1 seule, origine MANUEL |
+
+Les agents avaient donc bel et bien décidé dix-huit fois. Leurs ordres ne se
+remplissaient jamais.
+
+Cause : `avancerMarche` ne traite que le symbole affiché à l'écran. C'était
+suffisant tant que seul l'utilisateur passait des ordres, sur l'instrument
+qu'il regardait. Depuis que la veille fait tourner les agents sur une douzaine
+de marchés — AAPL, ETHUSD, USDCAD, BTCUSD, SPX500, USDJPY, XAUUSD, EURUSD,
+GBPUSD, MSFT — leurs ordres attendaient une bougie qui n'arrivait jamais,
+puisque personne n'avançait ces instruments-là.
+
+`avancerTousLesInstruments` traite tous les symboles portant un ordre en
+attente ou une position ouverte. Les autres sont ignorés : les traiter
+consommerait du quota de fournisseur pour rien. Il est appelé automatiquement
+après chaque cycle, sans quoi le problème reviendrait dès qu'on oublie de
+cliquer.
+
+Un instrument indisponible n'interrompt pas les autres — c'est exactement la
+situation où un ordre resterait bloqué sans que personne ne le sache. Les
+incidents sont listés dans le message de retour.
+
+Le curseur `dernier_horodatage_traite` reste global au portefeuille et n'est
+écrit qu'une fois, à la fin, avec le maximum atteint. L'écrire à chaque symbole
+ferait sauter les bougies des suivants, qui se retrouveraient filtrés par un
+curseur déjà avancé.
+
+---
+
 ## Limites annoncées franchement (phase 4b)
 
 ### Quinze ans d'historique : oui en simulé, non en données réelles
