@@ -9,6 +9,7 @@ import { Panneau } from '@/composants/ui/panneau';
 import type { Intervalle } from '@/lib/marche/types';
 
 import { BilletOrdre } from './billet-ordre';
+import { CommandeRejeu, type EtatRejeu } from './commande-rejeu';
 import {
   OrdresEnAttente,
   PositionsOuvertes,
@@ -33,6 +34,7 @@ export function Atelier({
   profilId,
   agents,
   blocageAgents,
+  rejeu,
 }: {
   symboles: readonly SymboleOption[];
   positions: readonly PositionAffichee[];
@@ -43,6 +45,7 @@ export function Atelier({
   profilId: string;
   agents: readonly AgentAffiche[];
   blocageAgents: string | null;
+  rejeu: EtatRejeu;
 }) {
   const [symbole, setSymbole] = useState(symboles[0]?.code ?? 'EURUSD');
   const [intervalle, setIntervalle] = useState<Intervalle>('M5');
@@ -72,6 +75,10 @@ export function Atelier({
             symboleCourant={symbole}
             intervalle={intervalle}
           />
+        </Panneau>
+
+        <Panneau titre="Rejeu historique">
+          <CommandeRejeu etat={rejeu} symbole={symbole} intervalle={intervalle} />
         </Panneau>
 
         <Panneau titre="Ordres en attente">

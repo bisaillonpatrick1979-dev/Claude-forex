@@ -14,9 +14,9 @@ Tenu à jour à chaque phase.
 | 2 | Graphique lightweight-charts v5, indicateurs, mise à jour en direct | ✅ livrée |
 | 3 | Moteur d'exécution simulé + garde-fous de risque | ✅ livrée |
 | 4a | Gouvernance des agents : permissions, autonomie, file de validation | ✅ livrée |
-| 4b | Orchestrateur : cycles LLM, débat, mémoire, déclencheurs planifiés | à faire |
-| 5 | Salle des marchés en temps réel | à faire |
-| 6 | Backtest, mémoire pgvector, coûts | à faire |
+| 4b | Orchestrateur : cycles LLM, débat, mémoire, enveloppe de capital, rejeu | ✅ livrée |
+| 5 | Salle des marchés en temps réel | ✅ fil des spécialistes livré ; marqueurs de décision sur le graphique à faire |
+| 6 | Backtest chiffré, comparateurs, agent de réflexion automatique | à faire |
 | 7 | Passerelle broker réel — **à discuter, rien de codé** | bloquée volontairement |
 
 ---
@@ -377,6 +377,122 @@ n'aura pas de chemin d'exécution à lui.
 
 ---
 
+## Décisions d'architecture (phase 4b)
+
+### Quatre fournisseurs de modèles derrière un contrat unique
+
+`lib/ia/types.ts` définit `AdaptateurLLM`, implémenté par Anthropic (SDK
+officiel), OpenAI, Google et `mock`. Aucun étage de l'application ne nomme un
+fournisseur : le choix se fait agent par agent, en base.
+
+Le défaut reste `mock` / `mock-1`. Un cycle complet — analyse, débat, synthèse,
+proposition, contrôle de risque, décision — tourne donc de bout en bout sans
+qu'aucune clé n'ait été saisie et sans dépenser un cent. C'est ce qui permet de
+voir la mécanique avant de décider de la payer. La sortie du mock est
+déterministe et **ancrée sur l'instantané réel** : il ne peut pas inventer un
+prix, exactement comme on l'exige d'un vrai agent.
+
+### `temperature` est refusé par les modèles Anthropic récents
+
+Opus 5, Sonnet 5 et Opus 4.7+ répondent **400** quand `temperature` est
+présent. Ce n'est pas un avertissement : l'appel échoue. La colonne
+`agents.temperature` reste utile pour OpenAI et Google, donc c'est
+`accepteTemperature()` qui décide de la transmettre — liste blanche et non
+liste noire : un modèle inconnu ne reçoit pas de température.
+
+Gemini a le piège symétrique : il répond 200 avec un candidat vide quand un
+filtre de sécurité a bloqué la génération. Le silence serait pris pour une
+réponse valide ; l'adaptateur en fait une erreur.
+
+### Deux méthodes d'embedding, jamais mélangées
+
+`openai-3-small` est sémantique et exige une clé OpenAI. `lexical-1536` est une
+projection lexicale calculée localement, sans réseau ni coût : nettement moins
+bonne, mais la mémoire fonctionne dès le premier jour sans clé.
+
+Les deux espaces vectoriels n'ont rien de commun. Comparer une distance cosinus
+de l'un à l'autre produirait un classement arbitraire présenté comme pertinent.
+La méthode est donc stockée avec le vecteur (`methode_embedding`) et les
+fonctions de recherche filtrent dessus. En cas d'échec OpenAI, **on ne bascule
+pas** silencieusement sur le lexical : le vecteur atterrirait dans le mauvais
+espace et polluerait durablement l'index.
+
+### L'orchestrateur ne réimplémente aucune barrière
+
+`lancerCycle` appelle `soumettreProposition` — donc `evaluerPermission` puis
+`evaluerGardeFous`, le chemin exact du banc d'essai. Deux chemins d'exécution
+finiraient par diverger, et c'est celui qui engage de l'argent qui dériverait.
+
+Il ajoute une barrière que les autres n'ont pas : `verifierAncrage`. Les
+garde-fous vérifient la taille, pas la vraisemblance du niveau. Un stop à 1,50
+sur une paire qui évolue entre 1,075 et 1,085 passerait tous les contrôles de
+risque — il est écarté ici, avant même le contrôle de risque, avec le nom de
+l'agent fautif.
+
+### L'instantané est la seule source de chiffres
+
+Il est figé, archivé dans `cycles.instantane_donnees`, et rendu aux agents sous
+forme tabulaire avec ses trous marqués « donnée manquante ». Le cycle est donc
+rejouable et auditable : on peut vérifier après coup qu'un chiffre cité existait
+bien.
+
+### Contexte borné, trois budgets
+
+Chaque agent reçoit des résumés, jamais le fil entier : sans cela le coût croît
+comme le carré du nombre d'interventions. Trois compteurs coupent un cycle —
+appels, secondes, et le plafond de dépense quotidien du profil (5 $ US par
+défaut, `profils.plafond_cout_quotidien_usd`). Une marge de sécurité de 0,05 $
+précède le plafond : le coût d'un appel n'étant connu qu'après coup, s'arrêter
+au plafond exact le dépasserait toujours un peu.
+
+### L'enveloppe : ce que les agents ont le droit d'engager
+
+L'utilisateur a 100 000 en banque et n'en confie que 10 000. Sans traitement,
+« 1 % de risque par trade » vaudrait 1 000 alors qu'il croyait en risquer 100.
+
+`portefeuilleDesAgents()` plafonne équité, solde **et sommet d'équité** à
+l'enveloppe avant de les passer aux garde-fous. Le sommet compte autant que le
+reste : comparer une enveloppe de 10 000 au sommet du compte entier
+déclencherait le contrôle de drawdown dès la première allocation.
+
+Ce n'est pas un sous-compte comptable — le solde, l'équité et la marge restent
+ceux du portefeuille unique. C'est un plafond d'engagement et une base de
+calcul. Défaut fermé : sans allocation, l'équité vue est nulle, toute ouverture
+est refusée, et le refus est **expliqué** plutôt que silencieux.
+
+Profits et pertes sont comptés séparément et jamais nets : un net de +200 peut
+cacher +5 000 et −4 800.
+
+### Le fil des spécialistes vit dans la salle des marchés
+
+Pas dans l'onglet Agents : c'est là qu'on regarde le marché, c'est là qu'on veut
+voir la firme délibérer. Chaque prise de parole est écrite « en cours » puis
+complétée, ce qui rend l'attente lisible via Realtime au lieu d'un écran figé
+pendant une minute. Un chargement initial complète le direct, que Realtime ne
+rejoue pas.
+
+Le poste de commande sépare deux décisions que rien ne doit confondre :
+**combien je leur confie** et **peuvent-ils agir seuls**. Fusionnées en un
+bouton, on autoriserait l'autonomie en croyant seulement allouer du capital.
+
+### Rejeu historique : cadence côté navigateur
+
+Le curseur vit sur le portefeuille (`rejeu_curseur`), pas dans une table à part :
+le moteur avance déjà selon `dernier_horodatage_traite`, et dupliquer l'horloge
+garantirait qu'elles divergent.
+
+La cadence est pilotée par le navigateur, qui demande « avance de N bougies ».
+Une horloge serveur exigerait un processus survivant entre deux requêtes, ce
+qu'un hébergement sans serveur ne fournit pas. Le prochain appel n'est armé
+qu'au retour du précédent : la cadence s'adapte d'elle-même à un serveur lent
+au lieu d'empiler les requêtes jusqu'à la limite de débit.
+
+Chaque bougie rejouée passe par le même `traiterBougie` que le papier temps
+réel. L'ATR est recalculé sur l'historique **connu à cet instant du rejeu** :
+utiliser la série entière laisserait le moteur regarder l'avenir.
+
+---
+
 ## Dérive entre la base déployée et le dépôt (juillet 2026)
 
 Six migrations avaient été appliquées sur le projet Supabase sans être versionnées ici :
@@ -678,6 +794,57 @@ Non vérifié : le parcours complet depuis le navigateur (soumission par le banc
 apparition dans la file, approbation) — il exige une session authentifiée que ce conteneur ne
 peut pas ouvrir. Le chemin serveur est en revanche le même que celui de l'ordre manuel, déjà
 éprouvé en phase 3, et les deux barrières qu'il ajoute sont couvertes par les tests.
+
+---
+
+## Limites annoncées franchement (phase 4b)
+
+### Quinze ans d'historique : oui en simulé, non en données réelles
+
+Aucun palier gratuit ne sert quinze ans de bougies M1. Twelve Data et Yahoo
+donnent quelques semaines en intraday et plusieurs années en journalier. Deux
+sources sont donc proposées, et l'interface dit laquelle est active :
+
+| Intervalle | Simulé | Fournisseur réel |
+| --- | --- | --- |
+| M1 | 15 ans | ~30 jours |
+| M5 / M15 / M30 | 15 ans | 60 à 180 jours |
+| H1 / H4 | 15 ans | ~2 ans |
+| D1 / W1 | 15 ans | ~15 ans |
+
+La série simulée est déterministe et cohérente, mais **ce n'est pas le vrai
+marché** : c'est un banc d'essai du moteur, des agents et des garde-fous, pas
+une performance passée. Les profondeurs « fournisseur » sont volontairement
+prudentes — mieux vaut annoncer un mois et le tenir que promettre quinze ans et
+rendre trois jours. Aucun trou n'est jamais comblé par de la donnée inventée.
+
+### Le rejeu sur données réelles ne remonte pas au-delà du cache
+
+`obtenirChandeliers` sert la fenêtre la plus récente : un rejeu `FOURNISSEUR`
+part donc de ce que le cache et le fournisseur détiennent. C'est dit au
+démarrage plutôt que découvert à mi-parcours.
+
+### Le latent vaut au dernier horodatage traité
+
+`positions.pnl_latent` est écrit à chaque bougie traitée par le moteur, pas à
+l'instant de l'affichage. Rafraîchir la page ne le recalcule pas : il faut que
+le moteur avance. L'interface le dit sous les cellules plutôt que de laisser
+supposer un temps réel qui n'existe pas.
+
+### Le cycle s'exécute dans la requête, sans file d'attente
+
+Le palier gratuit n'offre pas de file, et une file bricolée à coups de
+`setTimeout` ne survit pas à la fin de la fonction. Contrepartie : un cycle long
+peut dépasser la durée maximale d'exécution. Toutes les étapes déjà franchies
+restent écrites en base — c'est exactement ce que garantit l'écriture à chaque
+transition — mais le cycle restera dans son dernier état au lieu d'être marqué
+`TERMINE`. Un déclencheur planifié (cron Vercel) reste à faire.
+
+### Le calendrier macroéconomique n'est toujours pas branché
+
+`evaluerGardeFous` reçoit une liste d'événements vide : le contrôle
+`EVENEMENT_MACRO` passe donc systématiquement. Le code est là, la source de
+données manque.
 
 ---
 
