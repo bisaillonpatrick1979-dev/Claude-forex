@@ -70,6 +70,11 @@ export default async function PageSalleDesMarches() {
 
   const sourcesMarqueurs = await chargerSourcesMarqueurs(supabase, profilId);
 
+  const equite = versNombre(portefeuille?.equite);
+  const capitalInitial = versNombre(portefeuille?.capital_initial);
+  const sommet = versNombre(portefeuille?.sommet_equite);
+  const devise = portefeuille?.devise ?? 'USD';
+
   // Journal des placements : positions ouvertes d'abord, puis les fermetures
   // les plus récentes. Le raisonnement vient de la proposition d'origine quand
   // la position est née d'une décision d'agent.
@@ -122,10 +127,6 @@ export default async function PageSalleDesMarches() {
     ? await chargerEnveloppe(clientPrivilegie, profilId)
     : null;
 
-  const equite = versNombre(portefeuille?.equite);
-  const capitalInitial = versNombre(portefeuille?.capital_initial);
-  const sommet = versNombre(portefeuille?.sommet_equite);
-  const devise = portefeuille?.devise ?? 'USD';
 
   // Décomposition exacte, pas une approximation : par construction du moteur,
   // le solde ne contient que du réalisé et l'équité vaut solde + latent. Les
