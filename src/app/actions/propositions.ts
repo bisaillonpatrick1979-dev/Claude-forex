@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { chargerAgentParCle, compterTradesDuJour } from '@/lib/agents/depot';
+import { portefeuilleDesAgents, raisonIndisponibilite, type EnveloppeAgents } from '@/lib/agents/enveloppe';
+import { chargerEnveloppe } from '@/lib/agents/enveloppe-serveur';
 import {
   evaluerPermission,
   fusionnerRisque,
@@ -72,6 +74,9 @@ const schemaProposition = z.object({
   takeProfit: z.coerce.number().positive().nullable(),
   raisonnement: z.string().min(1).max(4000),
   confiance: z.coerce.number().int().min(0).max(100).nullable(),
+  /** Cycle d'orchestration d'où sort la proposition. Absent quand elle vient
+   *  du banc d'essai de la page Agents. */
+  cycleId: z.string().uuid().nullable().optional(),
 });
 
 export type SaisieProposition = z.input<typeof schemaProposition>;
@@ -156,6 +161,7 @@ function controlerRisque(
   prixDemande: number | null,
   stopLoss: number | null,
   parametresProfil: Preparation['parametres'],
+  enveloppe: EnveloppeAgents,
 ): DecisionGardeFous {
   const { marche, persiste } = preparation;
   const prixReference = prixDemande ?? marche.contexte.bougie.cloture;
@@ -170,14 +176,17 @@ function controlerRisque(
       tauxCotationVersCompte: marche.contexte.tauxCotationVersCompte,
     },
     {
-      portefeuille: persiste.etat.portefeuille,
+      // ═══ Les agents dimensionnent sur l'enveloppe qu'on leur a confiée, pas
+      //     sur le compte entier. Sans allocation, l'équité vue est nulle et
+      //     toute ouverture est refusée — défaut fermé. ═══
+      portefeuille: portefeuilleDesAgents(persiste.etat.portefeuille, enveloppe),
       positions: persiste.etat.positions.map((position) => ({
         position,
         instrument: marche.contexte.instrument,
         tauxCotationVersCompte: marche.contexte.tauxCotationVersCompte ?? 1,
         prixCourant: marche.contexte.bougie.cloture,
       })),
-      equiteDebutJournee: persiste.etat.portefeuille.equite,
+      equiteDebutJournee: portefeuilleDesAgents(persiste.etat.portefeuille, enveloppe).equite,
       evenementsMacro: [],
       maintenant: marche.contexte.bougie.horodatage,
     },
@@ -214,6 +223,9 @@ async function creerOrdre(
     stop_loss: parametres.stopLoss,
     take_profit: parametres.takeProfit,
     statut: 'EN_ATTENTE',
+    // Marque l'ordre comme venant des agents : c'est ce qui permettra
+    // d'imputer son résultat à l'enveloppe qui leur est confiée.
+    origine: 'AGENT',
     // Daté de la dernière bougie connue : aucun remplissage ne peut avoir lieu
     // avant la suivante. Même barrière anti-look-ahead que l'ordre manuel.
     cree_le: new Date(parametres.horodatageDecision * 1000).toISOString(),
@@ -278,6 +290,14 @@ export async function soumettreProposition(
   const maintenant = Math.floor(Date.now() / 1000);
   const tradesDuJour = await compterTradesDuJour(client, profilId, agent.id, new Date());
 
+  // ═══ Barrière 0 : le capital confié. Sans allocation, les agents analysent
+  //     et débattent, mais n'engagent rien. ═══
+  const enveloppe = await chargerEnveloppe(client, profilId);
+  const enveloppeIndisponible = raisonIndisponibilite(enveloppe);
+  if (enveloppeIndisponible) {
+    return { ok: false, verdict: 'REFUSE', message: enveloppeIndisponible, controles: [] };
+  }
+
   // ═══ Barrière 1 : le droit d'agir ═══
   const permission = evaluerPermission(
     {
@@ -305,6 +325,7 @@ export async function soumettreProposition(
       portefeuille_id: preparation.persiste.portefeuilleId,
       symbole_id: preparation.marche.symboleId,
       agent_id: agent.id,
+      cycle_id: donnees.cycleId ?? null,
       intervalle,
       sens: donnees.sens,
       type_ordre: donnees.type,
@@ -357,6 +378,7 @@ export async function soumettreProposition(
     donnees.prixDemande,
     donnees.stopLoss,
     preparation.parametres,
+    enveloppe,
   );
 
   await enregistrerDecisionRisque(
@@ -543,6 +565,15 @@ export async function approuverProposition(propositionId: string): Promise<Resul
   const quantiteDemandee = Number(proposition.quantite);
   const tradesDuJour = await compterTradesDuJour(client, profilId, agent.id, new Date());
 
+  // L'enveloppe est relue au moment de la validation : elle a pu fondre depuis
+  // que la proposition a été formulée, et approuver une taille calculée sur
+  // l'enveloppe d'hier exécuterait une décision qui n'a plus de sens.
+  const enveloppe = await chargerEnveloppe(client, profilId);
+  const enveloppeIndisponible = raisonIndisponibilite(enveloppe);
+  if (enveloppeIndisponible) {
+    return { ok: false, verdict: 'REFUSE', message: enveloppeIndisponible, controles: [] };
+  }
+
   // La validation lève l'exigence d'un humain, pas les droits de l'agent : un
   // agent suspendu ou désactivé entre-temps reste bloqué, et il faut le
   // réactiver explicitement pour que sa proposition parte.
@@ -587,6 +618,7 @@ export async function approuverProposition(propositionId: string): Promise<Resul
     proposition.prix_entree === null ? null : Number(proposition.prix_entree),
     proposition.stop_loss === null ? null : Number(proposition.stop_loss),
     preparation.parametres,
+    enveloppe,
   );
 
   await enregistrerDecisionRisque(
