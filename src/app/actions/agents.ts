@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
+import { ROLES_EXECUTANTS } from '@/lib/agents/niveaux';
 import { clientServeur } from '@/lib/supabase/serveur';
 import { profilAuthentifie } from '@/lib/supabase/session';
 
@@ -283,6 +284,67 @@ export async function toutMettreEnValidation(): Promise<ResultatAgent> {
         ? 'Aucun agent n’était autonome : rien ne partait déjà sans votre validation.'
         : `${nombre} agent(s) repassés en validation : plus rien ne s’exécute sans vous.`,
   };
+}
+
+/**
+ * Contrepartie de `toutMettreEnValidation` : confier la main aux agents en un
+ * geste, depuis la salle des marchés.
+ *
+ * Le bouton fait deux choses indissociables — sans l'une, l'autre ne produit
+ * rien : passer le profil en `PAPIER_AUTONOME` (tout autre mode impose la
+ * validation quoi qu'en disent les permissions) et rendre autonomes les seuls
+ * rôles habilités à exécuter. Les autres restent où ils sont : un analyste
+ * autonome n'aurait aucun sens, et le trigger en base le refuserait de toute
+ * façon.
+ *
+ * L'allocation, elle, n'est pas touchée ici. Confier la main sans confier de
+ * capital laisse les agents proposer sans pouvoir engager quoi que ce soit —
+ * c'est volontaire : ce sont deux décisions distinctes, et l'interface le dit.
+ */
+export async function confierLaMainAuxAgents(): Promise<ResultatAgent> {
+  const ctx = await contexte();
+  if (!ctx) return { ok: false, message: 'Session expirée.' };
+
+  const { error: erreurMode } = await ctx.supabase
+    .from('profils')
+    .update({ mode_operation: 'PAPIER_AUTONOME' })
+    .eq('id', ctx.profilId);
+
+  if (erreurMode) return { ok: false, message: messageErreur(erreurMode) };
+
+  const { data, error } = await ctx.supabase
+    .from('permissions_agents')
+    .update({ niveau: 'AUTONOME', peut_ouvrir: true, peut_fermer: true })
+    .eq('profil_id', ctx.profilId)
+    .in('agent_id', await idsExecutants(ctx))
+    .select('agent_id');
+
+  if (error) return { ok: false, message: messageErreur(error) };
+
+  revalidatePath('/agents');
+  revalidatePath('/salle-des-marches');
+
+  const nombre = data?.length ?? 0;
+  return {
+    ok: true,
+    message:
+      nombre === 0
+        ? 'Aucun agent exécutant à promouvoir : vérifiez que le trader et le gestionnaire de portefeuille sont actifs.'
+        : `${nombre} agent(s) exécutent désormais seuls, dans la limite du capital que vous leur avez confié.`,
+  };
+}
+
+/** Identifiants des agents habilités à exécuter. La liste vit dans
+ *  `lib/agents/niveaux.ts` et dans un trigger PostgreSQL ; on la relit ici
+ *  plutôt que de la recopier une troisième fois. */
+async function idsExecutants(ctx: { profilId: string; supabase: Awaited<ReturnType<typeof clientServeur>> }) {
+  const { data } = await ctx.supabase
+    .from('agents')
+    .select('id')
+    .eq('profil_id', ctx.profilId)
+    .in('role', ROLES_EXECUTANTS);
+
+  return (data ?? []).map((ligne) => ligne.id);
 }
 
 const schemaModele = z.object({

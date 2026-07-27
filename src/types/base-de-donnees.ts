@@ -837,6 +837,7 @@ export type Database = {
           id: string
           maj_le: string
           motif_fin: string | null
+          origine: Database["public"]["Enums"]["origine_position"]
           portefeuille_id: string
           prix_demande: number | null
           prix_moyen_rempli: number | null
@@ -846,6 +847,7 @@ export type Database = {
           quantite_remplie: number
           rempli_le: string | null
           sens: Database["public"]["Enums"]["sens_ordre"]
+          session_id: string | null
           statut: Database["public"]["Enums"]["statut_ordre"]
           stop_loss: number | null
           symbole_id: string
@@ -859,6 +861,7 @@ export type Database = {
           id?: string
           maj_le?: string
           motif_fin?: string | null
+          origine?: Database["public"]["Enums"]["origine_position"]
           portefeuille_id: string
           prix_demande?: number | null
           prix_moyen_rempli?: number | null
@@ -868,6 +871,7 @@ export type Database = {
           quantite_remplie?: number
           rempli_le?: string | null
           sens: Database["public"]["Enums"]["sens_ordre"]
+          session_id?: string | null
           statut?: Database["public"]["Enums"]["statut_ordre"]
           stop_loss?: number | null
           symbole_id: string
@@ -881,6 +885,7 @@ export type Database = {
           id?: string
           maj_le?: string
           motif_fin?: string | null
+          origine?: Database["public"]["Enums"]["origine_position"]
           portefeuille_id?: string
           prix_demande?: number | null
           prix_moyen_rempli?: number | null
@@ -890,6 +895,7 @@ export type Database = {
           quantite_remplie?: number
           rempli_le?: string | null
           sens?: Database["public"]["Enums"]["sens_ordre"]
+          session_id?: string | null
           statut?: Database["public"]["Enums"]["statut_ordre"]
           stop_loss?: number | null
           symbole_id?: string
@@ -924,6 +930,13 @@ export type Database = {
             columns: ["proposition_id"]
             isOneToOne: false
             referencedRelation: "propositions_ordres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordres_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions_autonomes"
             referencedColumns: ["id"]
           },
           {
@@ -1077,6 +1090,7 @@ export type Database = {
       }
       portefeuilles: {
         Row: {
+          capital_alloue_agents: number
           capital_initial: number
           cree_le: string
           dernier_horodatage_traite: number | null
@@ -1095,6 +1109,7 @@ export type Database = {
           sommet_equite: number
         }
         Insert: {
+          capital_alloue_agents?: number
           capital_initial?: number
           cree_le?: string
           dernier_horodatage_traite?: number | null
@@ -1113,6 +1128,7 @@ export type Database = {
           sommet_equite?: number
         }
         Update: {
+          capital_alloue_agents?: number
           capital_initial?: number
           cree_le?: string
           dernier_horodatage_traite?: number | null
@@ -1150,7 +1166,9 @@ export type Database = {
           marge_immobilisee: number
           motif_sortie: string | null
           ordre_ouverture_id: string | null
+          origine: Database["public"]["Enums"]["origine_position"]
           ouvert_le: string
+          pnl_latent: number
           pnl_realise: number | null
           portefeuille_id: string
           prix_entree: number
@@ -1173,7 +1191,9 @@ export type Database = {
           marge_immobilisee?: number
           motif_sortie?: string | null
           ordre_ouverture_id?: string | null
+          origine?: Database["public"]["Enums"]["origine_position"]
           ouvert_le?: string
+          pnl_latent?: number
           pnl_realise?: number | null
           portefeuille_id: string
           prix_entree: number
@@ -1196,7 +1216,9 @@ export type Database = {
           marge_immobilisee?: number
           motif_sortie?: string | null
           ordre_ouverture_id?: string | null
+          origine?: Database["public"]["Enums"]["origine_position"]
           ouvert_le?: string
+          pnl_latent?: number
           pnl_realise?: number | null
           portefeuille_id?: string
           prix_entree?: number
@@ -1284,6 +1306,7 @@ export type Database = {
           cree_le: string
           cycle_id: string | null
           decide_le: string | null
+          declenchee_par: string | null
           id: string
           intervalle: Database["public"]["Enums"]["intervalle"] | null
           maj_le: string
@@ -1293,6 +1316,7 @@ export type Database = {
           quantite: number
           raisonnement: string
           sens: Database["public"]["Enums"]["sens_ordre"]
+          session_id: string | null
           statut: Database["public"]["Enums"]["statut_proposition"]
           stop_loss: number | null
           symbole_id: string
@@ -1305,6 +1329,7 @@ export type Database = {
           cree_le?: string
           cycle_id?: string | null
           decide_le?: string | null
+          declenchee_par?: string | null
           id?: string
           intervalle?: Database["public"]["Enums"]["intervalle"] | null
           maj_le?: string
@@ -1314,6 +1339,7 @@ export type Database = {
           quantite: number
           raisonnement: string
           sens: Database["public"]["Enums"]["sens_ordre"]
+          session_id?: string | null
           statut?: Database["public"]["Enums"]["statut_proposition"]
           stop_loss?: number | null
           symbole_id: string
@@ -1326,6 +1352,7 @@ export type Database = {
           cree_le?: string
           cycle_id?: string | null
           decide_le?: string | null
+          declenchee_par?: string | null
           id?: string
           intervalle?: Database["public"]["Enums"]["intervalle"] | null
           maj_le?: string
@@ -1335,6 +1362,7 @@ export type Database = {
           quantite?: number
           raisonnement?: string
           sens?: Database["public"]["Enums"]["sens_ordre"]
+          session_id?: string | null
           statut?: Database["public"]["Enums"]["statut_proposition"]
           stop_loss?: number | null
           symbole_id?: string
@@ -1369,6 +1397,13 @@ export type Database = {
             columns: ["profil_id"]
             isOneToOne: false
             referencedRelation: "profils"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propositions_ordres_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions_autonomes"
             referencedColumns: ["id"]
           },
           {
@@ -1431,6 +1466,66 @@ export type Database = {
           },
           {
             foreignKeyName: "rapports_analyse_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profils"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions_autonomes: {
+        Row: {
+          arretee_le: string | null
+          capital_alloue: number
+          demarree_le: string
+          equite_portefeuille_initiale: number
+          id: string
+          maj_le: string
+          perte_max_pct: number
+          portefeuille_id: string
+          profil_id: string
+          raison_arret: string | null
+          sommet_enveloppe: number
+          statut: Database["public"]["Enums"]["statut_session"]
+        }
+        Insert: {
+          arretee_le?: string | null
+          capital_alloue: number
+          demarree_le?: string
+          equite_portefeuille_initiale: number
+          id?: string
+          maj_le?: string
+          perte_max_pct?: number
+          portefeuille_id: string
+          profil_id: string
+          raison_arret?: string | null
+          sommet_enveloppe: number
+          statut?: Database["public"]["Enums"]["statut_session"]
+        }
+        Update: {
+          arretee_le?: string | null
+          capital_alloue?: number
+          demarree_le?: string
+          equite_portefeuille_initiale?: number
+          id?: string
+          maj_le?: string
+          perte_max_pct?: number
+          portefeuille_id?: string
+          profil_id?: string
+          raison_arret?: string | null
+          sommet_enveloppe?: number
+          statut?: Database["public"]["Enums"]["statut_session"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_autonomes_portefeuille_id_fkey"
+            columns: ["portefeuille_id"]
+            isOneToOne: false
+            referencedRelation: "portefeuilles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_autonomes_profil_id_fkey"
             columns: ["profil_id"]
             isOneToOne: false
             referencedRelation: "profils"
@@ -1693,7 +1788,27 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vue_couverture_historique: {
+        Row: {
+          bougies: number | null
+          classe_actif: Database["public"]["Enums"]["classe_actif"] | null
+          dernier_import: string | null
+          derniere: string | null
+          intervalle: Database["public"]["Enums"]["intervalle"] | null
+          premiere: string | null
+          symbole: string | null
+          symbole_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chandeliers_symbole_id_fkey"
+            columns: ["symbole_id"]
+            isOneToOne: false
+            referencedRelation: "symboles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       declencher_kill_switch: {
@@ -1772,6 +1887,7 @@ export type Database = {
         | "PAPIER_CONSEIL"
         | "REEL_VALIDATION"
       niveau_autonomie: "OBSERVATEUR" | "PROPOSITION" | "AUTONOME"
+      origine_position: "MANUEL" | "AGENT"
       role_agent:
         | "ANALYSTE_TECHNIQUE"
         | "ANALYSTE_MACRO"
@@ -1804,6 +1920,11 @@ export type Database = {
         | "ACCEPTEE"
         | "EXPIREE"
         | "REFUSEE_PERMISSION"
+      statut_session:
+        | "EN_COURS"
+        | "ARRETEE_UTILISATEUR"
+        | "ARRETEE_ENVELOPPE"
+        | "ARRETEE_KILL_SWITCH"
       type_ordre: "MARCHE" | "LIMITE" | "STOP"
       type_transaction:
         | "DEPOT"
@@ -1967,6 +2088,7 @@ export const Constants = {
         "REEL_VALIDATION",
       ],
       niveau_autonomie: ["OBSERVATEUR", "PROPOSITION", "AUTONOME"],
+      origine_position: ["MANUEL", "AGENT"],
       role_agent: [
         "ANALYSTE_TECHNIQUE",
         "ANALYSTE_MACRO",
@@ -2001,6 +2123,12 @@ export const Constants = {
         "ACCEPTEE",
         "EXPIREE",
         "REFUSEE_PERMISSION",
+      ],
+      statut_session: [
+        "EN_COURS",
+        "ARRETEE_UTILISATEUR",
+        "ARRETEE_ENVELOPPE",
+        "ARRETEE_KILL_SWITCH",
       ],
       type_ordre: ["MARCHE", "LIMITE", "STOP"],
       type_transaction: [
