@@ -36,6 +36,9 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Runtime Deno : ni les globales ni les imports `jsr:` ne sont
+      // résolubles par la configuration Next.
+      "supabase/functions/**",
     ],
   },
 ];

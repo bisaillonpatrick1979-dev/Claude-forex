@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { consommerFranchissements } from '@/lib/alertes/depot';
 import { chargerEtat, chargerInstrument } from '@/lib/execution/persistance';
 import { bloc as blocAnnotations } from '@/lib/graphique/annotations';
 import { lireAnnotations } from '@/lib/graphique/depot';
@@ -10,6 +11,7 @@ import { ErreurLLM, type ContexteDeterministe, type MessageLLM } from '@/lib/ia/
 import { obtenirChandeliers } from '@/lib/marche/routeur';
 import type { Intervalle } from '@/lib/marche/types';
 import type { ParametresRisque } from '@/lib/risque/garde-fous';
+import { fuseauValide } from '@/lib/temps/journee';
 import type { Database } from '@/types/base-de-donnees';
 
 import {
@@ -126,7 +128,7 @@ class Compteur {
     }
     const restant = this.budget.restantUsd - this.cout;
     if (restant <= 0.05) {
-      return `Plafond de dépense quotidien atteint (${this.budget.plafondUsd.toFixed(2)} $ US). Les agents sont en pause jusqu’à demain (UTC).`;
+      return `Plafond de dépense quotidien atteint (${this.budget.plafondUsd.toFixed(2)} $ US). Les agents reprennent au prochain minuit — ${this.budget.libelleFuseau}.`;
     }
     return null;
   }
@@ -186,12 +188,17 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
   const budget = await etatBudget(client, profilId);
   if (!budgetSuffisant(budget)) {
     return echec(
-      `Plafond de dépense quotidien atteint : ${budget.depenseUsd.toFixed(2)} $ US sur ${budget.plafondUsd.toFixed(2)} $ US. Les agents reprennent demain (UTC) ou après relèvement du plafond dans les Réglages.`,
+      `Plafond de dépense quotidien atteint : ${budget.depenseUsd.toFixed(2)} $ US sur ${budget.plafondUsd.toFixed(2)} $ US. ` +
+        `Les agents reprennent au prochain minuit — ${budget.libelleFuseau} — ou après relèvement du plafond dans les Réglages.`,
     );
   }
 
   const [{ data: profil }, agents, parametres, { data: etatRejeu }] = await Promise.all([
-    client.from('profils').select('mode_operation, horizon_trading').eq('id', profilId).maybeSingle(),
+    client
+      .from('profils')
+      .select('mode_operation, horizon_trading, fuseau_horaire')
+      .eq('id', profilId)
+      .maybeSingle(),
     chargerAgents(client, profilId),
     lireParametresRisque(client, profilId),
     client
@@ -208,6 +215,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
 
   const mode = profil.mode_operation;
   const horizon = profil.horizon_trading;
+  const fuseauProfil = fuseauValide(profil.fuseau_horaire);
 
   const instrumentCharge = await chargerInstrument(client, symbole);
   if (!instrumentCharge) return echec(`Instrument ${symbole} inconnu.`);
@@ -281,7 +289,21 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
   // résistance marquée par le trader doit s'en expliquer.
   const annotations = await lireAnnotations(client, profilId, symbole, intervalle);
   const reperes = blocAnnotations(annotations, instantane.dernierPrix, instantane.decimales);
-  const rendu = reperes ? `${rendreInstantane(instantane)}\n\n${reperes}` : rendreInstantane(instantane);
+
+  // Niveaux franchis depuis la dernière délibération. Marqués consommés à la
+  // lecture : les relire à chaque cycle ferait raisonner les agents en boucle
+  // sur un mouvement déjà digéré.
+  const franchissements = await consommerFranchissements(
+    client,
+    profilId,
+    symbole,
+    instantane.decimales,
+    fuseauProfil,
+  );
+
+  const rendu = [rendreInstantane(instantane), reperes, franchissements]
+    .filter((bloc) => bloc.length > 0)
+    .join('\n\n');
 
   const contexteMock: ContexteDeterministe = {
     symbole: instantane.symbole,

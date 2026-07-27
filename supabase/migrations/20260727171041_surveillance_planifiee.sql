@@ -1,0 +1,51 @@
+-- Surveillance planifiée des alertes : pg_cron + pg_net.
+--
+-- ⚠ Migration de rattrapage, comme la précédente : la planification a d'abord
+-- été créée directement sur le projet distant. Ce fichier documente ce qui
+-- tourne, sous le numéro de version réellement appliqué.
+--
+-- ── La cadence n'est pas un détail de confort ───────────────────────────────
+--
+-- La fonction appelle le fournisseur une fois par couple profil/symbole ayant
+-- au moins une alerte active. L'arithmétique décide donc de la cadence, pas le
+-- confort :
+--
+--     toutes les minutes  →  1 440 appels/jour/symbole
+--     toutes les 5 min    →    288 appels/jour/symbole
+--
+-- Le palier gratuit Twelve Data autorise 800 appels par jour, tous usages
+-- confondus — graphiques et cycles compris, qui en consomment déjà quelques
+-- centaines. Une cadence à la minute épuisait le quota en treize heures sur un
+-- seul symbole, et l'épuisait **silencieusement** : la fonction appelait le
+-- fournisseur en direct, hors de toute comptabilité, si bien que
+-- `fournisseurs_donnees.quota_utilise` restait faux et que les refus tombaient
+-- ensuite sur les graphiques sans cause apparente.
+--
+-- Deux corrections, complémentaires :
+--   * la cadence passe à cinq minutes ;
+--   * la fonction réserve désormais chaque appel via
+--     `reserver_appel_fournisseur`, comme le reste de l'application. C'est la
+--     réservation qui garantit, la cadence ne fait que rendre le refus rare.
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+-- La planification elle-même n'est pas recréée ici : elle porte un jeton
+-- d'autorisation qui n'a pas sa place dans un dépôt. Elle se (re)crée ainsi,
+-- en remplaçant le jeton par la clé anon du projet :
+--
+--   select cron.schedule(
+--     'surveillance-alertes',
+--     '*/5 * * * *',
+--     $$select net.http_post(
+--         url := 'https://<projet>.supabase.co/functions/v1/surveillance-alertes',
+--         headers := '{"Content-Type":"application/json","Authorization":"Bearer <clé>"}'::jsonb
+--       )$$
+--   );
+--
+-- Pour modifier la cadence d'une planification existante :
+--
+--   select cron.alter_job(
+--     (select jobid from cron.job where jobname = 'surveillance-alertes'),
+--     schedule => '*/5 * * * *'
+--   );

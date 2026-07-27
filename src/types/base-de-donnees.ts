@@ -82,6 +82,121 @@ export type Database = {
           },
         ];
       };
+      alertes_prix: {
+        Row: {
+          active: boolean;
+          annotation_id: string | null;
+          cree_le: string;
+          dernier_cote: string | null;
+          dernier_prix: number | null;
+          direction: string;
+          id: string;
+          intervalle: string;
+          libelle_annotation: string | null;
+          niveau: number;
+          note: string | null;
+          profil_id: string;
+          symbole: string;
+          usage_unique: boolean;
+          verifie_le: string | null;
+          zone_morte: number;
+        };
+        Insert: {
+          active?: boolean;
+          annotation_id?: string | null;
+          cree_le?: string;
+          dernier_cote?: string | null;
+          dernier_prix?: number | null;
+          direction?: string;
+          id?: string;
+          intervalle?: string;
+          libelle_annotation?: string | null;
+          niveau: number;
+          note?: string | null;
+          profil_id: string;
+          symbole: string;
+          usage_unique?: boolean;
+          verifie_le?: string | null;
+          zone_morte: number;
+        };
+        Update: {
+          active?: boolean;
+          annotation_id?: string | null;
+          cree_le?: string;
+          dernier_cote?: string | null;
+          dernier_prix?: number | null;
+          direction?: string;
+          id?: string;
+          intervalle?: string;
+          libelle_annotation?: string | null;
+          niveau?: number;
+          note?: string | null;
+          profil_id?: string;
+          symbole?: string;
+          usage_unique?: boolean;
+          verifie_le?: string | null;
+          zone_morte?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "alertes_prix_profil_id_fkey";
+            columns: ["profil_id"];
+            isOneToOne: false;
+            referencedRelation: "profils";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      evenements_alerte: {
+        Row: {
+          alerte_id: string;
+          annotation_id: string | null;
+          consomme_par_agents: boolean;
+          declenche_le: string;
+          direction: string;
+          id: string;
+          libelle_annotation: string | null;
+          niveau: number;
+          prix: number;
+          profil_id: string;
+          symbole: string;
+        };
+        Insert: {
+          alerte_id: string;
+          annotation_id?: string | null;
+          consomme_par_agents?: boolean;
+          declenche_le?: string;
+          direction: string;
+          id?: string;
+          libelle_annotation?: string | null;
+          niveau: number;
+          prix: number;
+          profil_id: string;
+          symbole: string;
+        };
+        Update: {
+          alerte_id?: string;
+          annotation_id?: string | null;
+          consomme_par_agents?: boolean;
+          declenche_le?: string;
+          direction?: string;
+          id?: string;
+          libelle_annotation?: string | null;
+          niveau?: number;
+          prix?: number;
+          profil_id?: string;
+          symbole?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "evenements_alerte_alerte_id_fkey";
+            columns: ["alerte_id"];
+            isOneToOne: false;
+            referencedRelation: "alertes_prix";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       annotations_graphique: {
         Row: {
           couleur: string;

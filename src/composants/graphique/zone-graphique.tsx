@@ -16,6 +16,7 @@ import { INTERVALLES } from '@/lib/marche/intervalles';
 import type { Intervalle } from '@/lib/marche/types';
 
 import { BarreDessin } from './barre-dessin';
+import { PanneauAlertes } from './panneau-alertes';
 import { INDICATEURS_DEFAUT, type IndicateursActifs, type MarqueurDecision } from './types-graphique';
 import { useChandeliers } from './use-chandeliers';
 
@@ -228,6 +229,14 @@ export function ZoneGraphique({
           surChangement={rechargerAnnotations}
           decimales={decimales}
         />
+        <div className="mt-1.5">
+          <PanneauAlertes
+            symbole={symbole}
+            annotations={visibles}
+            prixCourant={mesures.dernier}
+            decimales={decimales}
+          />
+        </div>
       </div>
 
       {/* Le graphique occupe tout l'espace restant */}
