@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { adaptateur, FOURNISSEURS_LLM } from '@/lib/ia';
 import {
+  accepteEffort,
   accepteTemperature,
   coutUsd,
   MODELES_PAR_FOURNISSEUR,
@@ -156,6 +157,29 @@ describe('tarifs et contraintes de modèle', () => {
     expect(accepteTemperature('anthropic', 'claude-sonnet-5')).toBe(false);
     expect(accepteTemperature('anthropic', 'claude-haiku-4-5')).toBe(true);
     expect(accepteTemperature('openai', 'gpt-5.1')).toBe(true);
+  });
+
+  it('ne transmet pas d’effort aux modèles Anthropic qui le refusent', () => {
+    // Constaté en production : Haiku 4.5 répond 400 « This model does not
+    // support the effort parameter ». Trois agents sur douze échouaient à
+    // chaque cycle pendant que les neuf autres travaillaient — un cycle
+    // amputé rend quand même une décision, donc rien ne se voyait à l'écran.
+    expect(accepteEffort('anthropic', 'claude-haiku-4-5')).toBe(false);
+    expect(accepteEffort('anthropic', 'claude-opus-5')).toBe(true);
+    expect(accepteEffort('anthropic', 'claude-sonnet-5')).toBe(true);
+  });
+
+  it('rend les deux réglages Anthropic disjoints : jamais aucun, jamais les deux', () => {
+    // Chaque modèle Anthropic accepte exactement un des deux leviers. Si cette
+    // propriété se brisait, un modèle se retrouverait soit sans aucun réglage
+    // de sortie, soit à recevoir un champ qui annule l'appel.
+    for (const modele of MODELES_PAR_FOURNISSEUR.anthropic) {
+      const leviers = [
+        accepteTemperature('anthropic', modele),
+        accepteEffort('anthropic', modele),
+      ].filter(Boolean);
+      expect(leviers).toHaveLength(1);
+    }
   });
 
   it('rend null pour un modèle hors grille au lieu d’un coût de zéro', () => {

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-import { accepteTemperature, MODELES_PAR_FOURNISSEUR } from './tarifs';
+import { accepteEffort, accepteTemperature, MODELES_PAR_FOURNISSEUR } from './tarifs';
 import { ErreurLLM, type AdaptateurLLM, type ContexteAppelLLM, type DemandeLLM, type ReponseLLM } from './types';
 
 /**
@@ -106,7 +106,12 @@ export const adaptateurAnthropic: AdaptateurLLM = {
     // n'est pas le même réglage : la température fait varier le style, l'effort
     // fait varier la quantité de raisonnement — donc le coût et la latence.
     // C'est le seul levier de dépense dont on dispose une fois le modèle choisi.
-    if (demande.effort) {
+    //
+    // Le garde-fou est symétrique de celui de la température, et pour la même
+    // raison : Haiku 4.5 refuse `effort` par un 400, exactement comme Opus 5 et
+    // Sonnet 5 refusent `temperature`. Sans ce test, trois agents sur douze
+    // échouaient à chaque cycle.
+    if (demande.effort && accepteEffort('anthropic', demande.modele)) {
       parametres.output_config = { effort: demande.effort };
     }
 
