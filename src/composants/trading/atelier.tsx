@@ -37,6 +37,7 @@ export function Atelier({
   agents,
   blocageAgents,
   rejeu,
+  capitalInitial,
 }: {
   symboles: readonly SymboleOption[];
   positions: readonly PositionAffichee[];
@@ -49,6 +50,7 @@ export function Atelier({
   agents: readonly AgentAffiche[];
   blocageAgents: string | null;
   rejeu: EtatRejeu;
+  capitalInitial: number;
 }) {
   const [symbole, setSymbole] = useState(symboles[0]?.code ?? 'EURUSD');
   const [intervalle, setIntervalle] = useState<Intervalle>('M5');
@@ -81,7 +83,12 @@ export function Atelier({
         {panneauFirme}
 
         <Panneau titre="Rejeu historique et vitesse">
-          <CommandeRejeu etat={rejeu} symbole={symbole} intervalle={intervalle} />
+          <CommandeRejeu
+            etat={rejeu}
+            symbole={symbole}
+            intervalle={intervalle}
+            capitalInitial={capitalInitial}
+          />
         </Panneau>
 
         <Panneau titre="Passer un ordre">
@@ -103,7 +110,7 @@ export function Atelier({
         </Panneau>
 
         <Panneau titre="Ordres en attente">
-          <OrdresEnAttente ordres={ordres} symboleCourant={symbole} intervalle={intervalle} />
+          <OrdresEnAttente ordres={ordres} intervalle={intervalle} />
         </Panneau>
       </div>
 

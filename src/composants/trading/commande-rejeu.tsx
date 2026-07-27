@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { arreterRejeu, avancerRejeu, demarrerRejeu } from '@/app/actions/replay';
+import { reinitialiserFirme } from '@/app/actions/reinitialisation';
 import { profondeurMaximaleJours, type SourceRejeu } from '@/lib/marche/historique';
 import type { Intervalle } from '@/lib/marche/types';
 
@@ -69,10 +70,12 @@ export function CommandeRejeu({
   etat,
   symbole,
   intervalle,
+  capitalInitial,
 }: {
   etat: EtatRejeu;
   symbole: string;
   intervalle: Intervalle;
+  capitalInitial: number;
 }) {
   const router = useRouter();
   const [source, setSource] = useState<SourceRejeu>((etat.source as SourceRejeu) ?? 'SIMULE');
@@ -147,9 +150,8 @@ export function CommandeRejeu({
     });
   }, [router]);
 
-  if (!etat.actif) {
-    return (
-      <div className="flex flex-col gap-2 text-sm">
+  const choixPeriode = (
+    <>
         <div className="flex gap-2">
           <select
             aria-label="Source des données"
@@ -186,8 +188,17 @@ export function CommandeRejeu({
           disabled={enCours}
           className="rounded border border-bordure-vive px-2 py-1.5 text-xs transition hover:border-accent disabled:opacity-50"
         >
-          Rejouer {symbole} en {intervalle}
+          {etat.actif
+            ? `Redémarrer sur ${symbole} — ${PROFONDEURS.find((o) => o.jours === jours)?.libelle ?? ''}`
+            : `Rejouer ${symbole} en ${intervalle}`}
         </button>
+    </>
+  );
+
+  if (!etat.actif) {
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        {choixPeriode}
 
         {retour ? (
           <p className="rounded border border-bordure bg-panneau-clair px-2 py-1 text-xs text-texte-attenue">
@@ -245,6 +256,13 @@ export function CommandeRejeu({
         </p>
       </div>
 
+      <details className="rounded border border-bordure bg-panneau-clair px-2 py-1.5">
+        <summary className="cursor-pointer text-xs text-texte-attenue">
+          Changer de période ou de source
+        </summary>
+        <div className="mt-2 flex flex-col gap-2">{choixPeriode}</div>
+      </details>
+
       <div className="flex gap-2">
         <button
           type="button"
@@ -277,6 +295,30 @@ export function CommandeRejeu({
           Arrêter
         </button>
       </div>
+
+      <button
+        type="button"
+        disabled={enCours}
+        onClick={() => {
+          setEnLecture(false);
+          demarrer(async () => {
+            const resultat = await reinitialiserFirme({
+              capital: capitalInitial,
+              // Le point central : on efface la session, jamais ce que les
+              // agents ont appris. C'est tout l'intérêt d'un rejeu de cinq ans.
+              conserverLecons: true,
+              effacerHistorique: true,
+            });
+            setRetour(resultat.message);
+            setCurseur(null);
+            setProgression(null);
+            router.refresh();
+          });
+        }}
+        className="rounded border border-baisse/40 px-2 py-1.5 text-xs text-baisse transition hover:bg-baisse/10 disabled:opacity-50"
+      >
+        Réinitialiser les données — les leçons des agents sont conservées
+      </button>
 
       {retour ? (
         <p className="rounded border border-bordure bg-panneau-clair px-2 py-1 text-xs text-texte-attenue">

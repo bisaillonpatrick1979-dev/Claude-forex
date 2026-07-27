@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
-import { avancerMarche, fermerPositionManuelle } from '@/app/actions/trading';
+import { avancerTousLesInstruments, fermerPositionManuelle } from '@/app/actions/trading';
 import { EtatVide } from '@/composants/ui/panneau';
 import { couleurPnl, formaterMonnaie } from '@/lib/format';
 import type { Intervalle } from '@/lib/marche/types';
@@ -116,11 +116,9 @@ export function PositionsOuvertes({
 
 export function OrdresEnAttente({
   ordres,
-  symboleCourant,
   intervalle,
 }: {
   ordres: readonly OrdreAffiche[];
-  symboleCourant: string;
   intervalle: Intervalle;
 }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -159,14 +157,17 @@ export function OrdresEnAttente({
         disabled={enCours}
         onClick={() =>
           demarrer(async () => {
-            const resultat = await avancerMarche(symboleCourant, intervalle);
+            // Tous les instruments, pas seulement celui affiché : les agents
+            // travaillent sur une douzaine de marchés, et leurs ordres
+            // resteraient bloqués sur ceux qu'on ne regarde pas.
+            const resultat = await avancerTousLesInstruments(intervalle);
             setMessage(resultat.message);
           })
         }
         title="Fait passer le moteur sur les bougies fermées non encore traitées"
         className="rounded border border-bordure px-2 py-1 text-[0.72rem] uppercase tracking-wider text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
       >
-        {enCours ? 'Traitement…' : 'Traiter le marché'}
+        {enCours ? 'Traitement…' : 'Traiter tous les marchés'}
       </button>
 
       {message ? <p className="text-[0.72rem] text-texte-attenue">{message}</p> : null}

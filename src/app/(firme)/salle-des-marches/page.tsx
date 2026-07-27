@@ -262,6 +262,7 @@ export default async function PageSalleDesMarches() {
         fin: portefeuille?.rejeu_fin ?? null,
         source: portefeuille?.rejeu_source ?? null,
       }}
+      capitalInitial={capitalInitial ?? 100_000}
     />
   );
 }
