@@ -6,6 +6,8 @@ import {
   intervalleObservation,
   INTERVALLE_MAXIMUM_S,
   INTERVALLE_MINIMUM_S,
+  lisserVolatilite,
+  volatiliteObservee,
   volatiliteParMinute,
 } from '@/lib/alertes/cadence';
 
@@ -161,5 +163,68 @@ describe('distance au niveau le plus proche', () => {
   it('ignore les niveaux non finis', () => {
     expect(distanceAuNiveauLePlusProche(1.09, [Number.NaN, 1.091])).toBeCloseTo(0.001, 9);
     expect(distanceAuNiveauLePlusProche(1.09, [Number.NaN])).toBeNull();
+  });
+});
+
+describe('volatilité observée entre deux relevés', () => {
+  it('est invariante d’échelle : même marché, même volatilité', () => {
+    // Le cœur du sujet. Un prix ne parcourt pas une distance proportionnelle au
+    // temps, il diffuse : E|ΔP| = σ·√Δ·√(2/π). Mesurer sur une minute ou sur
+    // trente doit donner la même σ pour le même marché.
+    const sigma = PIP;
+    const attendu = (minutes: number) => sigma * Math.sqrt(minutes) * Math.sqrt(2 / Math.PI);
+
+    for (const minutes of [1, 5, 15, 30, 60]) {
+      expect(volatiliteObservee(attendu(minutes), minutes)).toBeCloseTo(sigma, 12);
+    }
+  });
+
+  it('ne divise pas par le temps — l’erreur qui figeait la surveillance', () => {
+    // Sur trente minutes, une division par Δ sous-estimerait d'un facteur √30.
+    // La conséquence n'était pas cosmétique : volatilité sous-estimée →
+    // intervalle allongé → écart plus grand → sous-estimation pire encore.
+    const mouvement = 10 * PIP;
+    const correct = volatiliteObservee(mouvement, 30);
+    const naif = mouvement / 30;
+    expect(correct / naif).toBeCloseTo(Math.sqrt(30) / Math.sqrt(2 / Math.PI), 6);
+    expect(correct).toBeGreaterThan(naif * 5);
+  });
+
+  it('rend zéro sur un écart de temps inexploitable', () => {
+    expect(volatiliteObservee(PIP, 0)).toBe(0);
+    expect(volatiliteObservee(PIP, 1 / 120)).toBe(0);
+    expect(volatiliteObservee(PIP, Number.NaN)).toBe(0);
+    expect(volatiliteObservee(Number.NaN, 5)).toBe(0);
+  });
+
+  it('traite un mouvement baissier comme un mouvement haussier', () => {
+    // La volatilité est une vitesse, pas une direction.
+    expect(volatiliteObservee(-3 * PIP, 4)).toBeCloseTo(volatiliteObservee(3 * PIP, 4), 15);
+  });
+});
+
+describe('lissage de la volatilité', () => {
+  it('adopte la première mesure telle quelle', () => {
+    expect(lisserVolatilite(null, 2 * PIP)).toBe(2 * PIP);
+    expect(lisserVolatilite(0, 2 * PIP)).toBe(2 * PIP);
+  });
+
+  it('amortit un pic isolé', () => {
+    // Un pic ne doit pas faire observer à la minute pendant une heure.
+    const lisse = lisserVolatilite(PIP, 10 * PIP);
+    expect(lisse).toBeGreaterThan(PIP);
+    expect(lisse).toBeLessThan(4 * PIP);
+  });
+
+  it('conserve l’estimation quand la mesure est inexploitable', () => {
+    // Un marché figé une minute ne veut pas dire un marché mort.
+    expect(lisserVolatilite(PIP, 0)).toBe(PIP);
+    expect(lisserVolatilite(PIP, Number.NaN)).toBe(PIP);
+  });
+
+  it('converge vers la nouvelle valeur si elle persiste', () => {
+    let valeur = PIP;
+    for (let index = 0; index < 40; index += 1) valeur = lisserVolatilite(valeur, 5 * PIP);
+    expect(valeur).toBeCloseTo(5 * PIP, 6);
   });
 });

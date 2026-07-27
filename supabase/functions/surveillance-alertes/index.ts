@@ -45,6 +45,15 @@
  * pas le graphe de modules de Next : duplication assumée, tenue honnête par les
  * tests du côté applicatif.
  *
+ * ── Correspondance des symboles ─────────────────────────────────────────────
+ *
+ * L'application nomme la paire `EURUSD` ; Twelve Data attend `EUR/USD`. La
+ * table `correspondances_symboles` porte la traduction, et l'ignorer rendait la
+ * fonction inutilisable depuis l'interface : toute alerte armée par un humain
+ * envoyait le code applicatif au fournisseur, qui ne répondait rien. Seule une
+ * alerte insérée à la main avec le code du fournisseur pouvait fonctionner —
+ * c'est-à-dire aucune de celles que l'application sait créer.
+ *
  * Secrets requis : TWELVE_DATA_API_KEY.
  */
 
@@ -76,6 +85,8 @@ const INTERVALLE_MAXIMUM_S = 1800;
 const MARGE_OBSERVATIONS = 4;
 /** Poids de la nouvelle mesure dans le lissage de la volatilité. */
 const LISSAGE = 0.3;
+/** E|X| = σ√(2/π) pour un mouvement gaussien centré. */
+const ESPERANCE_VALEUR_ABSOLUE = Math.sqrt(2 / Math.PI);
 
 function determinerCote(prix: number, niveau: number, zoneMorte: number): Cote {
   const marge = Math.abs(zoneMorte);
@@ -92,6 +103,27 @@ function intervalleObservation(distance: number, volatiliteParMinute: number): n
   const secondes = ((ecart / volatiliteParMinute) * 60) / MARGE_OBSERVATIONS;
   if (!Number.isFinite(secondes)) return INTERVALLE_MAXIMUM_S;
   return Math.min(INTERVALLE_MAXIMUM_S, Math.max(INTERVALLE_MINIMUM_S, Math.round(secondes)));
+}
+
+/**
+ * Codes du fournisseur, indexés par code applicatif.
+ *
+ * Une seule requête pour toute la table : elle compte quelques dizaines de
+ * lignes, et la charger entière coûte moins qu'un aller-retour par symbole.
+ */
+async function chargerCorrespondances(
+  supabase: ReturnType<typeof createClient>,
+): Promise<Map<string, string>> {
+  const { data } = await supabase
+    .from('correspondances_symboles')
+    .select('symbole_externe, fournisseur_code, symboles(code)')
+    .eq('fournisseur_code', FOURNISSEUR);
+
+  const table = new Map<string, string>();
+  for (const ligne of (data ?? []) as { symbole_externe: string; symboles: { code: string } | null }[]) {
+    if (ligne.symboles?.code) table.set(ligne.symboles.code, ligne.symbole_externe);
+  }
+  return table;
 }
 
 async function recupererPrix(symbole: string, cle: string): Promise<number | null> {
@@ -160,11 +192,17 @@ Deno.serve(async () => {
     return json({ surveillees: toutes.length, observes: 0, declenchees: 0, motif: 'aucune échéance' });
   }
 
+  const correspondances = await chargerCorrespondances(supabase);
+
   const prixParCle = new Map<string, number>();
   const refus: string[] = [];
 
   for (const cle of symbolesDus) {
     const [profilId, symbole] = cle.split('|');
+
+    // Sans correspondance connue, on tente le code tel quel : une alerte posée
+    // directement avec le code du fournisseur doit continuer de fonctionner.
+    const symboleFournisseur = correspondances.get(symbole!) ?? symbole!;
 
     const { data: reservation } = await supabase.rpc('reserver_appel_fournisseur', {
       p_profil_id: profilId,
@@ -179,7 +217,7 @@ Deno.serve(async () => {
       continue;
     }
 
-    const prix = await recupererPrix(symbole!, cleTwelveData);
+    const prix = await recupererPrix(symboleFournisseur, cleTwelveData);
     if (prix !== null) prixParCle.set(cle, prix);
   }
 
@@ -291,10 +329,17 @@ function majVolatilite(alerte: Alerte, prix: number, maintenant: Date): number {
   }
 
   const minutes = (maintenant.getTime() - new Date(alerte.verifie_le).getTime()) / 60_000;
-  // Sous la seconde, le rapport explose et rendrait une volatilité absurde.
+  // Sous la seconde, le rapport explose sur du bruit d'horodatage.
   if (!Number.isFinite(minutes) || minutes < 1 / 60) return precedente ?? 0;
 
-  const mesure = Math.abs(prix - Number(alerte.dernier_prix)) / minutes;
+  // Racine du temps, pas le temps. Un prix ne parcourt pas une distance
+  // proportionnelle à la durée, il diffuse : E|ΔP| = σ·√Δ·√(2/π). Diviser par Δ
+  // sous-estimait d'un facteur √30 sur un écart d'une demi-heure — et comme une
+  // volatilité sous-estimée allonge l'intervalle, qui allonge l'écart, la
+  // boucle se refermait et la surveillance se figeait au plafond.
+  const mesure =
+    Math.abs(prix - Number(alerte.dernier_prix)) /
+    (Math.sqrt(minutes) * ESPERANCE_VALEUR_ABSOLUE);
   if (!Number.isFinite(mesure)) return precedente ?? 0;
 
   return precedente === null || precedente <= 0

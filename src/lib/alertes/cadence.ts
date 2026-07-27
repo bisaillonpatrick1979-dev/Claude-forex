@@ -98,6 +98,59 @@ export function volatiliteParMinute(atr: number | null, minutesParBougie: number
   return atr / minutesParBougie;
 }
 
+
+/**
+ * Espérance de |ΔP| pour une marche aléatoire, en unités d'écart-type.
+ *
+ * Pour un mouvement gaussien centré, E|X| = σ√(2/π). La constante sert à
+ * dégonfler la mesure brute : sans elle, l'estimateur surévaluerait
+ * systématiquement de 25 %.
+ */
+const ESPERANCE_VALEUR_ABSOLUE = Math.sqrt(2 / Math.PI);
+
+/**
+ * Volatilité par minute déduite de deux observations espacées.
+ *
+ * Le piège, et il est sérieux : diviser le mouvement par le nombre de minutes
+ * écoulées est **faux**. Un prix ne parcourt pas une distance proportionnelle
+ * au temps, il diffuse — sur une marche aléatoire, `E|ΔP| = σ·√Δ·√(2/π)`. La
+ * bonne échelle est donc la **racine** du temps, pas le temps.
+ *
+ * Conséquence de l'erreur, mesurée : sur un écart de trente minutes, une
+ * division par Δ sous-estime la volatilité d'un facteur `√30 ≈ 5,5`. Et comme
+ * une volatilité sous-estimée allonge l'intervalle, qui allonge l'écart entre
+ * observations, qui sous-estime davantage — la boucle se referme et la
+ * surveillance se fige au plafond, précisément quand elle devrait se resserrer.
+ *
+ * L'estimateur ci-dessous est invariant d'échelle : mesuré sur une minute ou
+ * sur trente, il rend la même volatilité pour le même marché.
+ */
+export function volatiliteObservee(mouvement: number, minutesEcoulees: number): number {
+  const amplitude = Math.abs(mouvement);
+  if (!Number.isFinite(amplitude) || !Number.isFinite(minutesEcoulees)) return 0;
+  // Sous la seconde, le rapport explose sur du bruit d'horodatage.
+  if (minutesEcoulees < 1 / 60) return 0;
+
+  const estimation = amplitude / (Math.sqrt(minutesEcoulees) * ESPERANCE_VALEUR_ABSOLUE);
+  return Number.isFinite(estimation) ? estimation : 0;
+}
+
+/** Poids de la nouvelle mesure dans le lissage exponentiel. */
+export const LISSAGE = 0.3;
+
+/**
+ * Volatilité lissée.
+ *
+ * Une seule observation ne fait pas une volatilité : le lissage exponentiel
+ * évite qu'une bougie calme fasse croire à un marché mort, ou qu'un pic fasse
+ * observer toutes les minutes pendant une heure.
+ */
+export function lisserVolatilite(precedente: number | null, mesure: number): number {
+  if (precedente === null || !Number.isFinite(precedente) || precedente <= 0) return mesure;
+  if (!Number.isFinite(mesure) || mesure <= 0) return precedente;
+  return precedente * (1 - LISSAGE) + mesure * LISSAGE;
+}
+
 /**
  * Coût quotidien d'une cadence, en appels par symbole.
  *
