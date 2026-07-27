@@ -22,10 +22,17 @@
 -- ensuite sur les graphiques sans cause apparente.
 --
 -- Deux corrections, complémentaires :
---   * la cadence passe à cinq minutes ;
---   * la fonction réserve désormais chaque appel via
---     `reserver_appel_fournisseur`, comme le reste de l'application. C'est la
---     réservation qui garantit, la cadence ne fait que rendre le refus rare.
+--   * la fonction réserve chaque appel via `reserver_appel_fournisseur`, comme
+--     le reste de l'application ;
+--   * la cadence est décidée par la fonction elle-même, symbole par symbole,
+--     selon la distance au niveau et la volatilité récente — voir la migration
+--     `cadence_adaptative`. Le cron tourne à la minute et ne fait qu'ouvrir la
+--     porte : c'est la fonction qui juge s'il vaut la peine de dépenser.
+--
+-- Une cadence fixe se trompait dans les deux sens à la fois. Cinq minutes,
+-- c'est trop souvent quand le cours est à deux cents points du niveau, et trop
+-- rare quand il est collé dessus. La cadence adaptative coûte 48 appels par
+-- jour dans le premier cas et descend à la minute dans le second.
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
@@ -36,7 +43,7 @@ create extension if not exists pg_net;
 --
 --   select cron.schedule(
 --     'surveillance-alertes',
---     '*/5 * * * *',
+--     '* * * * *',
 --     $$select net.http_post(
 --         url := 'https://<projet>.supabase.co/functions/v1/surveillance-alertes',
 --         headers := '{"Content-Type":"application/json","Authorization":"Bearer <clé>"}'::jsonb
@@ -47,5 +54,5 @@ create extension if not exists pg_net;
 --
 --   select cron.alter_job(
 --     (select jobid from cron.job where jobname = 'surveillance-alertes'),
---     schedule => '*/5 * * * *'
+--     schedule => '* * * * *'
 --   );

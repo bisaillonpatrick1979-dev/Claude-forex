@@ -1,8 +1,9 @@
 /**
  * Surveillance des niveaux tracés — fonction Edge, appelée par pg_cron.
  *
- * Elle lit les alertes actives, interroge le fournisseur une fois par symbole,
- * et n'écrit un événement que sur un vrai changement de côté.
+ * Le cron tourne à la minute. Ce n'est **pas** la fréquence d'appel au
+ * fournisseur : la fonction décide elle-même, symbole par symbole, s'il vaut la
+ * peine de dépenser une requête. Le cron ne fait qu'ouvrir la porte.
  *
  * ── Machine à trois états ───────────────────────────────────────────────────
  *
@@ -11,32 +12,40 @@
  *      entre les deux               →  dedans
  *
  * Un franchissement n'est reconnu que sur `dessous → dessus` ou l'inverse. Un
- * cours qui vibre sur le niveau reste `dedans` et ne notifie rien — ce qu'une
- * condition « prix >= niveau » ne sait pas produire. Le côté est mis à jour
- * même quand la direction surveillée ne correspond pas : filtrer les deux
- * ensemble désynchroniserait la machine, et une alerte haussière resterait
+ * cours qui vibre sur le niveau reste `dedans` et ne notifie rien. Le côté est
+ * mis à jour même quand la direction surveillée ne correspond pas : filtrer les
+ * deux ensemble désynchroniserait la machine, et une alerte haussière resterait
  * bloquée sur « dessus » sans jamais revoir de remontée.
  *
- * La logique est reproduite et testée dans `src/lib/alertes/evaluation.ts`.
- * Deno ne partage pas le graphe de modules de Next : c'est une duplication
- * assumée, et les tests du côté applicatif sont ce qui la tient honnête.
+ * ── Cadence adaptative ──────────────────────────────────────────────────────
+ *
+ * Une cadence fixe se trompe dans les deux sens à la fois : trop souvent quand
+ * le cours est hors de portée du niveau, trop rare quand il est collé dessus.
+ * On estime donc le temps de parcours et on observe quatre fois avant l'arrivée
+ * possible :
+ *
+ *     minutes pour atteindre ≈ distance / mouvement typique par minute
+ *     intervalle             = minutes ÷ 4,  borné [1 min, 30 min]
+ *
+ * La volatilité est mesurée sur les observations elles-mêmes, lissée par
+ * moyenne exponentielle. Ce n'est pas une prédiction de direction — seulement
+ * une vitesse habituelle, et la marge de quatre absorbe l'erreur.
+ *
+ * Résultat : 48 appels par jour sur un cours qui dérive loin de tout niveau,
+ * jusqu'à 1 440 sur un cours qui teste une résistance. La cadence fixe à cinq
+ * minutes en coûtait 288 quoi qu'il arrive — et manquait quand même le test.
  *
  * ── Comptabilité du quota ───────────────────────────────────────────────────
  *
- * Chaque appel passe d'abord par `reserver_appel_fournisseur`, la même
- * réservation atomique que le reste de l'application. Sans elle, cette
- * fonction consommait le quota Twelve Data **en dehors** de toute
- * comptabilité : l'application se croyait à 220/800 pendant que le fournisseur
- * comptait bien plus, et les refus seraient tombés sur les graphiques et les
- * cycles sans qu'on puisse les rattacher à quoi que ce soit.
+ * Chaque appel passe par `reserver_appel_fournisseur`, la même réservation
+ * atomique que le reste de l'application. La cadence rend le refus rare ; c'est
+ * la réservation qui garantit.
  *
- * L'arithmétique, à retenir avant de changer la cadence du cron : une minute
- * d'intervalle sur un seul symbole fait 1 440 appels par jour, contre 800
- * autorisés. Le palier gratuit est épuisé en treize heures — et la
- * réservation, elle, coupe avant.
+ * La logique est reproduite et testée dans `src/lib/alertes/`. Deno ne partage
+ * pas le graphe de modules de Next : duplication assumée, tenue honnête par les
+ * tests du côté applicatif.
  *
- * Secrets requis : TWELVE_DATA_API_KEY. SUPABASE_URL et
- * SUPABASE_SERVICE_ROLE_KEY sont injectées automatiquement.
+ * Secrets requis : TWELVE_DATA_API_KEY.
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -54,17 +63,35 @@ interface Alerte {
   zone_morte: number;
   direction: Sens | 'les_deux';
   dernier_cote: Cote | null;
+  dernier_prix: number | null;
+  verifie_le: string | null;
+  volatilite_minute: number | null;
+  prochaine_observation_le: string | null;
   usage_unique: boolean;
 }
 
 const FOURNISSEUR = 'twelvedata';
+const INTERVALLE_MINIMUM_S = 60;
+const INTERVALLE_MAXIMUM_S = 1800;
+const MARGE_OBSERVATIONS = 4;
+/** Poids de la nouvelle mesure dans le lissage de la volatilité. */
+const LISSAGE = 0.3;
 
-/** De quel côté du niveau se trouve le prix, zone morte comprise. */
 function determinerCote(prix: number, niveau: number, zoneMorte: number): Cote {
   const marge = Math.abs(zoneMorte);
   if (prix > niveau + marge) return 'dessus';
   if (prix < niveau - marge) return 'dessous';
   return 'dedans';
+}
+
+function intervalleObservation(distance: number, volatiliteParMinute: number): number {
+  const ecart = Math.abs(distance);
+  if (!Number.isFinite(ecart) || !Number.isFinite(volatiliteParMinute) || volatiliteParMinute <= 0) {
+    return INTERVALLE_MAXIMUM_S;
+  }
+  const secondes = ((ecart / volatiliteParMinute) * 60) / MARGE_OBSERVATIONS;
+  if (!Number.isFinite(secondes)) return INTERVALLE_MAXIMUM_S;
+  return Math.min(INTERVALLE_MAXIMUM_S, Math.max(INTERVALLE_MINIMUM_S, Math.round(secondes)));
 }
 
 async function recupererPrix(symbole: string, cle: string): Promise<number | null> {
@@ -104,34 +131,45 @@ Deno.serve(async () => {
     return json({ erreur: 'TWELVE_DATA_API_KEY absente des secrets de la fonction.' }, 500);
   }
 
+  const maintenant = new Date();
+
   const { data: alertes, error } = await supabase
     .from('alertes_prix')
     .select(
-      'id, profil_id, symbole, annotation_id, libelle_annotation, niveau, zone_morte, direction, dernier_cote, usage_unique',
+      'id, profil_id, symbole, annotation_id, libelle_annotation, niveau, zone_morte, direction, dernier_cote, dernier_prix, verifie_le, volatilite_minute, prochaine_observation_le, usage_unique',
     )
     .eq('active', true);
 
   if (error) return json({ erreur: error.message }, 500);
   if (!alertes || alertes.length === 0) return json({ surveillees: 0, declenchees: 0 });
 
-  // Un appel réseau par couple profil/symbole, quel que soit le nombre
-  // d'alertes posées dessus. Le quota est la ressource rare, pas le calcul.
-  const couples = new Map<string, { profilId: string; symbole: string }>();
-  for (const alerte of alertes as Alerte[]) {
-    couples.set(`${alerte.profil_id}|${alerte.symbole}`, {
-      profilId: alerte.profil_id,
-      symbole: alerte.symbole,
-    });
+  const toutes = alertes as Alerte[];
+
+  // Une alerte est « due » quand son échéance est passée. Le symbole entier est
+  // observé dès qu'une seule de ses alertes est due : le prix est le même pour
+  // toutes, autant en faire profiter les autres puisque l'appel est payé.
+  const symbolesDus = new Set<string>();
+  for (const alerte of toutes) {
+    const echeance = alerte.prochaine_observation_le;
+    if (!echeance || new Date(echeance) <= maintenant) {
+      symbolesDus.add(`${alerte.profil_id}|${alerte.symbole}`);
+    }
+  }
+
+  if (symbolesDus.size === 0) {
+    return json({ surveillees: toutes.length, observes: 0, declenchees: 0, motif: 'aucune échéance' });
   }
 
   const prixParCle = new Map<string, number>();
   const refus: string[] = [];
 
-  for (const [cle, { profilId, symbole }] of couples) {
+  for (const cle of symbolesDus) {
+    const [profilId, symbole] = cle.split('|');
+
     const { data: reservation } = await supabase.rpc('reserver_appel_fournisseur', {
       p_profil_id: profilId,
       p_code: FOURNISSEUR,
-      p_maintenant: new Date().toISOString(),
+      p_maintenant: maintenant.toISOString(),
     });
 
     const autorise = Array.isArray(reservation) ? reservation[0]?.autorise : undefined;
@@ -141,18 +179,35 @@ Deno.serve(async () => {
       continue;
     }
 
-    const prix = await recupererPrix(symbole, cleTwelveData);
+    const prix = await recupererPrix(symbole!, cleTwelveData);
     if (prix !== null) prixParCle.set(cle, prix);
   }
 
-  const evenements: Record<string, unknown>[] = [];
-  const misesAJour: { id: string; cote: Cote; prix: number; desactiver: boolean }[] = [];
+  // Distance au niveau armé le plus proche, par symbole : c'est elle qui fixe
+  // la cadence, et elle se calcule sur l'ensemble des alertes du symbole.
+  const niveauxParCle = new Map<string, number[]>();
+  for (const alerte of toutes) {
+    const cle = `${alerte.profil_id}|${alerte.symbole}`;
+    const liste = niveauxParCle.get(cle) ?? [];
+    liste.push(Number(alerte.niveau));
+    niveauxParCle.set(cle, liste);
+  }
 
-  for (const alerte of alertes as Alerte[]) {
-    const prix = prixParCle.get(`${alerte.profil_id}|${alerte.symbole}`);
-    // Prix non obtenu — quota refusé ou fournisseur muet. On ne touche pas à
-    // l'état : écrire un côté sans observation inventerait un mouvement et
-    // pourrait faire manquer le franchissement suivant.
+  const evenements: Record<string, unknown>[] = [];
+  const misesAJour: {
+    id: string;
+    cote: Cote;
+    prix: number;
+    volatilite: number;
+    prochaine: string;
+    desactiver: boolean;
+  }[] = [];
+
+  for (const alerte of toutes) {
+    const cle = `${alerte.profil_id}|${alerte.symbole}`;
+    const prix = prixParCle.get(cle);
+    // Prix non obtenu — pas dû, quota refusé, ou fournisseur muet. On ne touche
+    // pas à l'état : écrire un côté sans observation inventerait un mouvement.
     if (prix === undefined) continue;
 
     const coteActuelle = determinerCote(prix, Number(alerte.niveau), Number(alerte.zone_morte));
@@ -162,8 +217,7 @@ Deno.serve(async () => {
     if (cotePrecedente === 'dessous' && coteActuelle === 'dessus') sens = 'haussier';
     if (cotePrecedente === 'dessus' && coteActuelle === 'dessous') sens = 'baissier';
 
-    const retenu =
-      sens !== null && (alerte.direction === 'les_deux' || alerte.direction === sens);
+    const retenu = sens !== null && (alerte.direction === 'les_deux' || alerte.direction === sens);
 
     if (retenu && sens) {
       evenements.push({
@@ -178,10 +232,25 @@ Deno.serve(async () => {
       });
     }
 
+    // Volatilité observée : mouvement depuis la dernière mesure, ramené à la
+    // minute, lissé. Une seule observation ne fait pas une volatilité — d'où le
+    // repli sur la mesure brute au premier passage.
+    const volatilite = majVolatilite(alerte, prix, maintenant);
+
+    const niveaux = niveauxParCle.get(cle) ?? [];
+    const distance = niveaux.reduce(
+      (meilleure, niveau) => Math.min(meilleure, Math.abs(prix - niveau)),
+      Number.POSITIVE_INFINITY,
+    );
+
+    const attente = intervalleObservation(distance, volatilite);
+
     misesAJour.push({
       id: alerte.id,
       cote: coteActuelle,
       prix,
+      volatilite,
+      prochaine: new Date(maintenant.getTime() + attente * 1000).toISOString(),
       desactiver: Boolean(retenu && alerte.usage_unique),
     });
   }
@@ -197,20 +266,41 @@ Deno.serve(async () => {
       .update({
         dernier_cote: maj.cote,
         dernier_prix: maj.prix,
-        verifie_le: new Date().toISOString(),
+        volatilite_minute: maj.volatilite,
+        prochaine_observation_le: maj.prochaine,
+        verifie_le: maintenant.toISOString(),
         ...(maj.desactiver ? { active: false } : {}),
       })
       .eq('id', maj.id);
   }
 
   return json({
-    surveillees: alertes.length,
-    couples: couples.size,
+    surveillees: toutes.length,
+    dus: symbolesDus.size,
     observes: prixParCle.size,
     refusQuota: refus,
     declenchees: evenements.length,
   });
 });
+
+function majVolatilite(alerte: Alerte, prix: number, maintenant: Date): number {
+  const precedente = alerte.volatilite_minute === null ? null : Number(alerte.volatilite_minute);
+
+  if (alerte.dernier_prix === null || alerte.verifie_le === null) {
+    return precedente ?? 0;
+  }
+
+  const minutes = (maintenant.getTime() - new Date(alerte.verifie_le).getTime()) / 60_000;
+  // Sous la seconde, le rapport explose et rendrait une volatilité absurde.
+  if (!Number.isFinite(minutes) || minutes < 1 / 60) return precedente ?? 0;
+
+  const mesure = Math.abs(prix - Number(alerte.dernier_prix)) / minutes;
+  if (!Number.isFinite(mesure)) return precedente ?? 0;
+
+  return precedente === null || precedente <= 0
+    ? mesure
+    : precedente * (1 - LISSAGE) + mesure * LISSAGE;
+}
 
 function json(corps: unknown, statut = 200): Response {
   return new Response(JSON.stringify(corps), {
