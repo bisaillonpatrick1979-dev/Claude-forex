@@ -24,6 +24,8 @@ import { estIntervalle } from '@/lib/marche/intervalles';
 import type { Intervalle } from '@/lib/marche/types';
 import { evaluerGardeFous, type DecisionGardeFous } from '@/lib/risque/garde-fous';
 import { limiterDebit } from '@/lib/securite/limitation-debit';
+import { FUSEAU_DEFAUT } from '@/lib/temps/journee';
+import { equiteOuvertureJournee } from '@/lib/temps/journee-serveur';
 import { clientAdminOptionnel } from '@/lib/supabase/admin';
 import { profilAuthentifie } from '@/lib/supabase/session';
 
@@ -162,9 +164,22 @@ function controlerRisque(
   stopLoss: number | null,
   parametresProfil: Preparation['parametres'],
   enveloppe: EnveloppeAgents,
+  equiteOuvertureCompte: number,
 ): DecisionGardeFous {
   const { marche, persiste } = preparation;
   const prixReference = prixDemande ?? marche.contexte.bougie.cloture;
+
+  // Le repère d'ouverture est celui du compte ; les agents, eux, dimensionnent
+  // sur leur enveloppe. On ramène donc le repère à leur échelle, pour que le
+  // pourcentage calculé par le garde-fou reste celui de la perte réelle du
+  // compte — c'est elle qui doit mettre la firme en pause, pas une variation
+  // d'allocation.
+  const portefeuilleAgents = portefeuilleDesAgents(persiste.etat.portefeuille, enveloppe);
+  const equiteCompte = persiste.etat.portefeuille.equite;
+  const equiteDebutJournee =
+    equiteCompte > 0
+      ? portefeuilleAgents.equite * (equiteOuvertureCompte / equiteCompte)
+      : portefeuilleAgents.equite;
 
   return evaluerGardeFous(
     {
@@ -179,14 +194,14 @@ function controlerRisque(
       // ═══ Les agents dimensionnent sur l'enveloppe qu'on leur a confiée, pas
       //     sur le compte entier. Sans allocation, l'équité vue est nulle et
       //     toute ouverture est refusée — défaut fermé. ═══
-      portefeuille: portefeuilleDesAgents(persiste.etat.portefeuille, enveloppe),
+      portefeuille: portefeuilleAgents,
       positions: persiste.etat.positions.map((position) => ({
         position,
         instrument: marche.contexte.instrument,
         tauxCotationVersCompte: marche.contexte.tauxCotationVersCompte ?? 1,
         prixCourant: marche.contexte.bougie.cloture,
       })),
-      equiteDebutJournee: portefeuilleDesAgents(persiste.etat.portefeuille, enveloppe).equite,
+      equiteDebutJournee,
       evenementsMacro: [],
       maintenant: marche.contexte.bougie.horodatage,
     },
@@ -278,7 +293,7 @@ export async function soumettreProposition(
 
   const { data: profil } = await client
     .from('profils')
-    .select('mode_operation')
+    .select('mode_operation, fuseau_horaire')
     .eq('id', profilId)
     .maybeSingle();
 
@@ -288,7 +303,15 @@ export async function soumettreProposition(
   }
 
   const maintenant = Math.floor(Date.now() / 1000);
-  const tradesDuJour = await compterTradesDuJour(client, profilId, agent.id, new Date());
+  const fuseau = profil?.fuseau_horaire ?? FUSEAU_DEFAUT;
+  const tradesDuJour = await compterTradesDuJour(client, profilId, agent.id, new Date(), fuseau);
+  const equiteOuverture = await equiteOuvertureJournee(client, {
+    profilId,
+    portefeuilleId: preparation.persiste.portefeuilleId,
+    equiteActuelle: preparation.persiste.etat.portefeuille.equite,
+    soldeActuel: preparation.persiste.etat.portefeuille.solde,
+    fuseau,
+  });
 
   // ═══ Barrière 0 : le capital confié. Sans allocation, les agents analysent
   //     et débattent, mais n'engagent rien. ═══
@@ -379,6 +402,7 @@ export async function soumettreProposition(
     donnees.stopLoss,
     preparation.parametres,
     enveloppe,
+    equiteOuverture,
   );
 
   await enregistrerDecisionRisque(
@@ -558,12 +582,20 @@ export async function approuverProposition(propositionId: string): Promise<Resul
 
   const { data: profil } = await client
     .from('profils')
-    .select('mode_operation')
+    .select('mode_operation, fuseau_horaire')
     .eq('id', profilId)
     .maybeSingle();
 
   const quantiteDemandee = Number(proposition.quantite);
-  const tradesDuJour = await compterTradesDuJour(client, profilId, agent.id, new Date());
+  const fuseau = profil?.fuseau_horaire ?? FUSEAU_DEFAUT;
+  const tradesDuJour = await compterTradesDuJour(client, profilId, agent.id, new Date(), fuseau);
+  const equiteOuverture = await equiteOuvertureJournee(client, {
+    profilId,
+    portefeuilleId: preparation.persiste.portefeuilleId,
+    equiteActuelle: preparation.persiste.etat.portefeuille.equite,
+    soldeActuel: preparation.persiste.etat.portefeuille.solde,
+    fuseau,
+  });
 
   // L'enveloppe est relue au moment de la validation : elle a pu fondre depuis
   // que la proposition a été formulée, et approuver une taille calculée sur
@@ -619,6 +651,7 @@ export async function approuverProposition(propositionId: string): Promise<Resul
     proposition.stop_loss === null ? null : Number(proposition.stop_loss),
     preparation.parametres,
     enveloppe,
+    equiteOuverture,
   );
 
   await enregistrerDecisionRisque(

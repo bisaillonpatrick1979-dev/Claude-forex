@@ -152,7 +152,7 @@ export const CHAMPS_LIMITES: readonly ChampLimite[] = [
     pas: 1,
     table: 'profils',
     colonne: 'plafond_cout_quotidien_usd',
-    aide: 'Dépense maximale en appels de modèles, journée UTC. Atteint : les cycles s’arrêtent net plutôt que de finir à moitié.',
+    aide: 'Dépense maximale en appels de modèles sur une journée locale, selon le fuseau du profil. Atteint : les cycles s’arrêtent net plutôt que de finir à moitié.',
   },
 ];
 

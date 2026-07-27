@@ -1307,6 +1307,7 @@ export type Database = {
         Row: {
           courriel: string;
           cree_le: string;
+          fuseau_horaire: string;
           horizon_trading: Database["public"]["Enums"]["horizon_trading"];
           id: string;
           maj_le: string;
@@ -1318,6 +1319,7 @@ export type Database = {
         Insert: {
           courriel: string;
           cree_le?: string;
+          fuseau_horaire?: string;
           horizon_trading?: Database["public"]["Enums"]["horizon_trading"];
           id: string;
           maj_le?: string;
@@ -1329,6 +1331,7 @@ export type Database = {
         Update: {
           courriel?: string;
           cree_le?: string;
+          fuseau_horaire?: string;
           horizon_trading?: Database["public"]["Enums"]["horizon_trading"];
           id?: string;
           maj_le?: string;

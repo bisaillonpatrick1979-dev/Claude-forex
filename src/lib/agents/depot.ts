@@ -1,5 +1,6 @@
 import type { ClientAdmin } from '@/lib/execution/contexte-serveur';
 import type { ClasseActif } from '@/lib/marche/types';
+import { debutJourneeLocale, FUSEAU_DEFAUT } from '@/lib/temps/journee';
 
 import type { PermissionAgent } from './permissions';
 import type { RoleAgent } from './niveaux';
@@ -125,21 +126,24 @@ export async function chargerAgentParCle(
 }
 
 /**
- * Ordres déjà acceptés pour cet agent depuis le début de la journée UTC.
+ * Ordres déjà acceptés pour cet agent depuis le début de la journée locale.
  *
  * Compté sur les propositions acceptées et non sur les ordres : un ordre
  * annulé avant remplissage a quand même consommé une décision de l'agent, et
  * c'est bien le nombre de décisions qu'on plafonne.
+ *
+ * La journée est celle du fuseau du profil. Calée sur l'UTC, elle remettait le
+ * quota à zéro à 18 h en Alberta — un agent limité à trois trades par jour
+ * pouvait en placer six entre midi et minuit.
  */
 export async function compterTradesDuJour(
   client: ClientAdmin,
   profilId: string,
   agentId: string,
   maintenant: Date,
+  fuseau: string = FUSEAU_DEFAUT,
 ): Promise<number> {
-  const debutJournee = new Date(
-    Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth(), maintenant.getUTCDate()),
-  );
+  const debutJournee = debutJourneeLocale(fuseau, maintenant);
 
   const { count } = await client
     .from('propositions_ordres')
