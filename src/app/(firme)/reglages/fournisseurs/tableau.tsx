@@ -114,10 +114,27 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
       </div>
 
       {ligne.necessiteCle && ligne.cleEnvironnement ? (
-        <p className="mt-3 rounded border border-hausse/40 bg-hausse/10 px-2.5 py-1.5 text-xs text-hausse">
-          Une clé est lue dans les variables d’environnement du serveur. Elle est utilisée telle
-          quelle — rien à saisir ici. En enregistrer une ci-dessous la remplacerait.
-        </p>
+        <div
+          className={`mt-3 rounded border px-2.5 py-1.5 text-xs ${
+            ligne.actif
+              ? 'border-hausse/40 bg-hausse/10 text-hausse'
+              : 'border-alerte/40 bg-alerte/10 text-alerte'
+          }`}
+        >
+          <p>
+            Une clé est lue dans les variables d’environnement du serveur. Elle est utilisée telle
+            quelle — rien à saisir ici.
+          </p>
+          {/* Une clé détectée sur un fournisseur inactif ne sert à rien, et
+              c'est le piège : tout semble en place alors que le routeur
+              l'ignore. On le dit au lieu de laisser chercher. */}
+          {!ligne.actif ? (
+            <p className="mt-1 font-medium">
+              Ce fournisseur est encore inactif : le routeur ne l’utilisera pas. Cliquez sur
+              « Activer » ci-dessus pour que le graphique et les agents s’en servent.
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {ligne.necessiteCle && !ligne.cleEnvironnement && ligne.variablesEnvironnement.length > 0 ? (
