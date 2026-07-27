@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { ROLES_EXECUTANTS } from '@/lib/agents/niveaux';
+import { estNiveauEffort } from '@/lib/ia/types';
 import { estFournisseurLLM } from '@/lib/ia';
 import { nomSeance, SEANCES } from '@/lib/marche/seances-mondiales';
 import { clientServeur } from '@/lib/supabase/serveur';
@@ -448,7 +449,13 @@ const schemaModele = z.object({
   fournisseur: z.string().refine(estFournisseurLLM, 'Fournisseur inconnu.'),
   modele: z.string().min(1).max(80),
   temperature: z.coerce.number().min(0).max(2),
-  tokensMax: z.coerce.number().int().min(256).max(32_000),
+  // Plancher relevé : sur les modèles où la réflexion est active, le plafond
+  // couvre la réflexion **et** la réponse. Trop bas, le bloc JSON final est
+  // coupé et l'extraction échoue sur une sortie qui n'a rien d'invalide.
+  tokensMax: z.coerce.number().int().min(2_000).max(64_000),
+  // Optionnel : un appelant qui ne s'en préoccupe pas garde le niveau médian
+  //  plutôt que de se voir refuser l'enregistrement.
+  effort: z.string().refine(estNiveauEffort, 'Niveau d’effort inconnu.').default('medium'),
 });
 
 export type SaisieModele = z.input<typeof schemaModele>;
@@ -473,6 +480,7 @@ export async function definirModeleAgent(
       modele: analyse.data.modele,
       temperature: analyse.data.temperature,
       tokens_max: analyse.data.tokensMax,
+      effort_llm: analyse.data.effort,
     })
     .eq('id', agentId)
     .eq('profil_id', ctx.profilId);

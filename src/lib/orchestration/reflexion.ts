@@ -210,6 +210,7 @@ export async function reflechirSurPositionsFermees(
           modele: reflexion.modele,
           temperature: reflexion.temperature,
           tokensMax: reflexion.tokensMax,
+          effort: reflexion.effort,
         },
         systeme: construireSysteme(
           {

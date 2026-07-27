@@ -14,6 +14,13 @@ export type FournisseurLLM = Database['public']['Enums']['fournisseur_llm'];
 
 export type RoleMessage = 'utilisateur' | 'assistant';
 
+export const NIVEAUX_EFFORT = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type NiveauEffort = (typeof NIVEAUX_EFFORT)[number];
+
+export function estNiveauEffort(valeur: string): valeur is NiveauEffort {
+  return (NIVEAUX_EFFORT as readonly string[]).includes(valeur);
+}
+
 export interface MessageLLM {
   readonly role: RoleMessage;
   readonly contenu: string;
@@ -41,6 +48,15 @@ export interface DemandeLLM {
    * Opus 4.7+ répondent 400 quand `temperature` est présent.
    */
   readonly temperature: number | null;
+  /**
+   * Profondeur de réflexion demandée. `null` = ne rien transmettre.
+   *
+   * C'est le levier de coût et de latence des modèles récents, et il n'a rien
+   * d'équivalent à la température : celle-ci fait varier le style, celui-ci
+   * fait varier la quantité de raisonnement. Les fournisseurs qui ne le
+   * connaissent pas l'ignorent.
+   */
+  readonly effort?: NiveauEffort | null;
   /** Nom du format JSON attendu, injecté dans le prompt et lu par `mock`. */
   readonly formatJson?: string | null;
   /**

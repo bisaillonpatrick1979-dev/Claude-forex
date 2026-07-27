@@ -67,6 +67,13 @@ const MODELES_AVEC_RECHERCHE: readonly string[] = [
   'claude-sonnet-5',
 ];
 
+/** Catégorie du refus quand l'API la précise. Elle vaut d'être affichée : elle
+ *  dit s'il faut reformuler ou changer de modèle. */
+function categorieRefus(reponse: Anthropic.Messages.Message): string | null {
+  const details = (reponse as { stop_details?: { category?: unknown } }).stop_details;
+  return typeof details?.category === 'string' ? details.category : null;
+}
+
 export const adaptateurAnthropic: AdaptateurLLM = {
   code: 'anthropic',
   nom: 'Anthropic (Claude)',
@@ -95,6 +102,14 @@ export const adaptateurAnthropic: AdaptateurLLM = {
       parametres.temperature = demande.temperature;
     }
 
+    // L'effort remplace la température sur les modèles qui la refusent, mais ce
+    // n'est pas le même réglage : la température fait varier le style, l'effort
+    // fait varier la quantité de raisonnement — donc le coût et la latence.
+    // C'est le seul levier de dépense dont on dispose une fois le modèle choisi.
+    if (demande.effort) {
+      parametres.output_config = { effort: demande.effort };
+    }
+
     if (demande.rechercheWeb && MODELES_AVEC_RECHERCHE.includes(demande.modele)) {
       const restriction =
         demande.domainesAutorises && demande.domainesAutorises.length > 0
@@ -111,6 +126,17 @@ export const adaptateurAnthropic: AdaptateurLLM = {
 
     try {
       const reponse = await client.messages.create(parametres, { signal: demande.signal });
+
+      // Un refus des classificateurs de sécurité arrive en HTTP 200 avec un
+      // contenu vide. Sans ce contrôle, l'extraction JSON échouerait sur
+      // « aucun bloc exploitable » — un message qui envoie déboguer le schéma
+      // alors que le modèle a simplement refusé de répondre.
+      if (reponse.stop_reason === 'refusal') {
+        throw new ErreurLLM(
+          'anthropic',
+          `Le modèle a refusé de répondre${categorieRefus(reponse) ? ` (${categorieRefus(reponse)})` : ''}. Reformuler la demande, ou confier ce rôle à un autre modèle.`,
+        );
+      }
 
       return {
         contenu: texte(reponse.content),

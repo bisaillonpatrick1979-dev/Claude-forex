@@ -374,6 +374,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
           modele: agent.modele,
           temperature: agent.temperature,
           tokensMax: agent.tokensMax,
+          effort: agent.effort,
         },
         systeme: construireSysteme(
           {

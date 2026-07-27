@@ -20,6 +20,7 @@ export type Database = {
           cle: string;
           couleur: string;
           cree_le: string;
+          effort_llm: string;
           famille_strategie: string | null;
           fournisseur_llm: Database["public"]["Enums"]["fournisseur_llm"];
           id: string;
@@ -38,6 +39,7 @@ export type Database = {
           cle: string;
           couleur?: string;
           cree_le?: string;
+          effort_llm?: string;
           famille_strategie?: string | null;
           fournisseur_llm?: Database["public"]["Enums"]["fournisseur_llm"];
           id?: string;
@@ -56,6 +58,7 @@ export type Database = {
           cle?: string;
           couleur?: string;
           cree_le?: string;
+          effort_llm?: string;
           famille_strategie?: string | null;
           fournisseur_llm?: Database["public"]["Enums"]["fournisseur_llm"];
           id?: string;
