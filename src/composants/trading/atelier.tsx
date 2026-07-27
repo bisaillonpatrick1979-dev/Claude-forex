@@ -80,7 +80,10 @@ export function Atelier({
     // *pendant* qu'on regarde le prix, et il a besoin de hauteur, pas de
     // largeur. Tous les autres descendent.
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+      {/* `items-start` : chaque panneau garde la hauteur qu'il s'est donnée.
+          Sans lui, une grille étire ses éléments sur le plus haut, et un
+          contenu qui dépasse sa boîte se retrouve à recouvrir le voisin. */}
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
         {/* Trois quarts de la largeur, et une hauteur qui suit l'écran plutôt
             qu'un plafond fixe : sur un grand moniteur le graphique respire,
             sur un portable il garde un plancher lisible. */}
@@ -96,38 +99,38 @@ export function Atelier({
           />
         </section>
 
-        {/* La colonne de droite ne dépasse jamais la hauteur du graphique.
-            C'était le vrai défaut : le fil grandissait à chaque message, la
-            rangée s'étirait avec lui, et il fallait faire défiler toutes les
-            analyses pour atteindre le billet d'ordre. Le fil défile désormais
-            dans son propre cadre — on voit les derniers messages, le reste
-            s'atteint en remontant dedans, pas en poussant la page. */}
-        <div className="flex min-h-0 flex-col gap-3 xl:h-[68vh]">
-          {/* L'enveloppe garde sa taille : c'est un bloc de chiffres, le
-              rétrécir les tronquerait. C'est au fil de céder la place. */}
-          <div className="shrink-0">{panneauAgents}</div>
-
-          <Panneau
-            titre="Fil des spécialistes"
-            corpsDefilant
-            className="min-h-[14rem] max-h-[24rem] flex-1 xl:max-h-none"
-          >
-            <FilSpecialistes
-              profilId={profilId}
-              symbole={symbole}
-              intervalle={intervalle}
-              agents={agents}
-              blocage={blocageAgents}
-            />
-          </Panneau>
-        </div>
+        {/* À côté du graphique : le fil des agents, et rien d'autre.
+            La version précédente empilait ici l'enveloppe *et* le fil sous une
+            hauteur imposée. Dès que la somme des deux dépassait cette hauteur,
+            le contenu débordait par-dessus la rangée du dessous — d'où les
+            panneaux qui se chevauchaient, et le fil réduit à rien.
+            Un seul enfant, une hauteur définie : plus d'arithmétique à faire
+            tenir, donc plus rien qui déborde. L'enveloppe « Vos agents »
+            descend avec les autres boîtes, où sa place est naturelle : c'est un
+            bloc de chiffres qu'on consulte, pas quelque chose qu'on suit en
+            continu. */}
+        <Panneau
+          titre="Fil des spécialistes"
+          corpsDefilant
+          className="h-[24rem] xl:h-[68vh]"
+        >
+          <FilSpecialistes
+            profilId={profilId}
+            symbole={symbole}
+            intervalle={intervalle}
+            agents={agents}
+            blocage={blocageAgents}
+          />
+        </Panneau>
       </div>
 
       {/* Tout ce qu'on consulte par intermittence, sous le graphique. Deux
           colonnes sur tablette, quatre sur grand écran : les panneaux sont
           courts, les empiler sur une seule colonne obligerait à défiler pour
           rien. */}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {panneauAgents}
+
         <Panneau titre="Passer un ordre">
           <BilletOrdre
             symbole={symbole}
