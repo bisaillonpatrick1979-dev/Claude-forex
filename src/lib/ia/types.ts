@@ -43,12 +43,27 @@ export interface DemandeLLM {
   readonly temperature: number | null;
   /** Nom du format JSON attendu, injecté dans le prompt et lu par `mock`. */
   readonly formatJson?: string | null;
+  /**
+   * Autorise l'agent à chercher sur le web et à lire des pages.
+   *
+   * Réservé aux rôles dont le travail est hors du graphique — macro, nouvelles,
+   * fondamental. Le donner à l'analyste technique n'apporterait rien : ses
+   * données sont déjà dans l'instantané, et chaque recherche coûte des tokens.
+   *
+   * Tous les fournisseurs ne savent pas le faire. Ceux qui ne savent pas
+   * l'ignorent et répondent sans, ce qui reste préférable à un échec.
+   */
+  readonly rechercheWeb?: boolean;
+  /** Domaines auxquels la recherche est restreinte. Vide = aucune restriction. */
+  readonly domainesAutorises?: readonly string[];
   readonly contexteDeterministe?: ContexteDeterministe | null;
   readonly signal?: AbortSignal;
 }
 
 export interface ReponseLLM {
   readonly contenu: string;
+  /** Sources réellement consultées, pour que l'utilisateur puisse vérifier. */
+  readonly sources?: readonly { readonly titre: string; readonly url: string }[];
   readonly tokensEntree: number;
   readonly tokensSortie: number;
   readonly latenceMs: number;

@@ -26,6 +26,47 @@ function texte(blocs: Anthropic.Messages.ContentBlock[]): string {
     .trim();
 }
 
+/**
+ * Sources réellement consultées, extraites des blocs de résultat de recherche.
+ *
+ * On les remonte pour les afficher dans le fil : un agent qui parle de « la
+ * décision de la BCE » doit pouvoir être vérifié. Sans le lien, l'affirmation
+ * ne vaut pas mieux qu'une hallucination bien tournée.
+ */
+function sourcesConsultees(
+  blocs: Anthropic.Messages.ContentBlock[],
+): readonly { titre: string; url: string }[] {
+  const vues = new Map<string, string>();
+
+  for (const bloc of blocs) {
+    if (bloc.type !== 'web_search_tool_result') continue;
+    const contenu = (bloc as { content?: unknown }).content;
+    if (!Array.isArray(contenu)) continue;
+
+    for (const resultat of contenu) {
+      const url = (resultat as { url?: unknown }).url;
+      const titre = (resultat as { title?: unknown }).title;
+      if (typeof url === 'string' && !vues.has(url)) {
+        vues.set(url, typeof titre === 'string' && titre ? titre : url);
+      }
+    }
+  }
+
+  return [...vues.entries()].map(([url, titre]) => ({ url, titre }));
+}
+
+/**
+ * Modèles capables des outils web côté serveur.
+ *
+ * Liste blanche : demander l'outil à un modèle qui ne le connaît pas fait
+ * échouer l'appel entier, alors que s'en passer ne fait que dégrader la
+ * réponse. On préfère une analyse sans recherche à pas d'analyse du tout.
+ */
+const MODELES_AVEC_RECHERCHE: readonly string[] = [
+  'claude-opus-5',
+  'claude-sonnet-5',
+];
+
 export const adaptateurAnthropic: AdaptateurLLM = {
   code: 'anthropic',
   nom: 'Anthropic (Claude)',
@@ -54,11 +95,26 @@ export const adaptateurAnthropic: AdaptateurLLM = {
       parametres.temperature = demande.temperature;
     }
 
+    if (demande.rechercheWeb && MODELES_AVEC_RECHERCHE.includes(demande.modele)) {
+      const restriction =
+        demande.domainesAutorises && demande.domainesAutorises.length > 0
+          ? { allowed_domains: [...demande.domainesAutorises] }
+          : {};
+
+      // `max_uses` borne la dépense : sans plafond, un agent peut enchaîner
+      // quinze recherches sur une question qui en méritait deux.
+      parametres.tools = [
+        { type: 'web_search_20260209', name: 'web_search', max_uses: 5, ...restriction },
+        { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3, ...restriction },
+      ] as Anthropic.Messages.MessageCreateParams['tools'];
+    }
+
     try {
       const reponse = await client.messages.create(parametres, { signal: demande.signal });
 
       return {
         contenu: texte(reponse.content),
+        sources: sourcesConsultees(reponse.content),
         tokensEntree: reponse.usage.input_tokens,
         tokensSortie: reponse.usage.output_tokens,
         latenceMs: Date.now() - debut,

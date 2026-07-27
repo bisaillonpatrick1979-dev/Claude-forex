@@ -1,6 +1,7 @@
 import { EntetePage } from '@/composants/ui/entete-page';
 import { Panneau } from '@/composants/ui/panneau';
 import { adaptateur, FOURNISSEURS_LLM } from '@/lib/ia';
+import { cleDepuisEnvironnement, variablesReconnues } from '@/lib/ia/appel';
 import { tarif } from '@/lib/ia/tarifs';
 import { listerClesPubliques } from '@/lib/marche/cles';
 import { chiffrementConfigure } from '@/lib/securite/chiffrement';
@@ -49,6 +50,10 @@ export default async function PageClesIa() {
       modeles: implementation.modeles,
       indiceVisuel: cle?.indiceVisuel ?? null,
       enregistreeLe: cle?.majLe ?? null,
+      // La clé peut venir de deux endroits ; l'écran doit dire lequel, sinon
+      // on cherche pendant une heure pourquoi « ça ne marche pas ».
+      source: cle ? ('BASE' as const) : cleDepuisEnvironnement(code) ? ('ENVIRONNEMENT' as const) : null,
+      variables: variablesReconnues(code),
       agentsUtilisant: comptes.get(code) ?? 0,
       tarifs: implementation.modeles.map((modele) => {
         const grille = tarif(modele);

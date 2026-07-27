@@ -5,7 +5,10 @@ import { z } from 'zod';
 
 import { raisonIndisponibilite } from '@/lib/agents/enveloppe';
 import { chargerEnveloppe } from '@/lib/agents/enveloppe-serveur';
+import { chargerInstrument } from '@/lib/execution/persistance';
+import { budgetSuffisant, etatBudget } from '@/lib/ia/budget';
 import { estIntervalle } from '@/lib/marche/intervalles';
+import { obtenirChandeliers } from '@/lib/marche/routeur';
 import type { Intervalle } from '@/lib/marche/types';
 import { lancerCycle } from '@/lib/orchestration/cycle';
 import { reflechirSurPositionsFermees } from '@/lib/orchestration/reflexion';
@@ -88,6 +91,169 @@ export async function lancerCycleAgents(
     message: resultat.message,
     cycleId: resultat.cycleId,
     coutUsd: resultat.coutUsd,
+  };
+}
+
+export interface ResultatVeille {
+  readonly ok: boolean;
+  readonly message: string;
+  readonly cycleId: string | null;
+  readonly aTravaille: boolean;
+  /** Horodatage de la dernière bougie analysée, pour l'affichage. */
+  readonly derniereBougie: number | null;
+}
+
+/**
+ * Un tour de veille : analyser seulement s'il y a du nouveau.
+ *
+ * C'est la différence entre une firme qui travaille en continu et une firme qui
+ * brûle du budget. Relancer une délibération complète sur exactement les mêmes
+ * bougies produit exactement la même conclusion, en la facturant une seconde
+ * fois. La veille ne déclenche donc un cycle que lorsqu'une bougie s'est
+ * fermée depuis le dernier cycle sur ce couple symbole/intervalle.
+ *
+ * Conséquence assumée : en M5, les agents délibèrent au plus toutes les cinq
+ * minutes, quelle que soit la fréquence à laquelle on appelle cette fonction.
+ * Pour les faire travailler plus souvent, on descend l'intervalle ou on lance
+ * un rejeu — c'est ce que fait le mode accéléré.
+ */
+export async function veiller(
+  symbole: string,
+  intervalle: string,
+): Promise<ResultatVeille> {
+  const profilId = await profilAuthentifie();
+  if (!profilId) {
+    return {
+      ok: false,
+      message: 'Session expirée.',
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  const analyse = schema.safeParse({ symbole, intervalle });
+  if (!analyse.success) {
+    return {
+      ok: false,
+      message: analyse.error.issues[0]?.message ?? 'Saisie invalide.',
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  const client = clientAdminOptionnel();
+  if (!client) {
+    return {
+      ok: false,
+      message: 'SUPABASE_SERVICE_ROLE_KEY absente côté serveur.',
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  // Budget d'abord : inutile de charger le marché pour découvrir ensuite qu'on
+  // ne peut rien dépenser.
+  const budget = await etatBudget(client, profilId);
+  if (!budgetSuffisant(budget)) {
+    return {
+      ok: false,
+      message: `Plafond quotidien atteint (${budget.depenseUsd.toFixed(2)} $ sur ${budget.plafondUsd.toFixed(2)} $). La veille reprend demain (UTC).`,
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  const instrument = await chargerInstrument(client, analyse.data.symbole);
+  if (!instrument) {
+    return {
+      ok: false,
+      message: `Instrument ${analyse.data.symbole} inconnu.`,
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  let derniereBougie: number | null = null;
+  try {
+    const marche = await obtenirChandeliers({
+      client,
+      profilId,
+      symbole: analyse.data.symbole,
+      intervalle: analyse.data.intervalle as Intervalle,
+      limite: 2,
+    });
+    derniereBougie = marche.chandeliers[marche.chandeliers.length - 1]?.horodatage ?? null;
+  } catch (erreur) {
+    return {
+      ok: false,
+      message: `Données indisponibles : ${erreur instanceof Error ? erreur.message : 'erreur inconnue'}.`,
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  if (derniereBougie === null) {
+    return {
+      ok: false,
+      message: 'Aucune bougie disponible.',
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  // Le dernier cycle sur ce couple a-t-il déjà vu cette bougie ?
+  const { data: dernierCycle } = await client
+    .from('cycles')
+    .select('id, instantane_donnees')
+    .eq('profil_id', profilId)
+    .eq('symbole_id', instrument.symboleId)
+    .eq('intervalle', analyse.data.intervalle)
+    .in('etat', ['TERMINE', 'ECHOUE'])
+    .order('demarre_le', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const instantanePrecedent = dernierCycle?.instantane_donnees as
+    | { chandeliers?: { horodatage?: number }[] }
+    | null;
+  const derniereVue =
+    instantanePrecedent?.chandeliers?.[instantanePrecedent.chandeliers.length - 1]?.horodatage ??
+    null;
+
+  if (derniereVue !== null && derniereVue >= derniereBougie) {
+    return {
+      ok: true,
+      message: 'Rien de nouveau : la dernière bougie a déjà été analysée.',
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie,
+    };
+  }
+
+  const resultat = await lancerCycle({
+    client,
+    profilId,
+    symbole: analyse.data.symbole,
+    intervalle: analyse.data.intervalle as Intervalle,
+    declencheur: 'PLANIFIE',
+  });
+
+  revalidatePath('/salle-des-marches');
+  revalidatePath('/validation');
+
+  return {
+    ok: resultat.ok,
+    message: resultat.message,
+    cycleId: resultat.cycleId,
+    aTravaille: true,
+    derniereBougie,
   };
 }
 

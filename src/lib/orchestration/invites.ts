@@ -29,6 +29,8 @@ export interface ContexteFirme {
   readonly modeOperation: string;
   readonly strategies: readonly string[];
   readonly lecons: readonly string[];
+  /** Consigne de recherche web, quand le rôle y a droit. */
+  readonly consigneRecherche?: string | null;
 }
 
 const FORMATS: Readonly<Record<string, string>> = {
@@ -75,6 +77,10 @@ export function construireSysteme(
       'LEÇONS TIRÉES DES POSITIONS PASSÉES DE CETTE FIRME :',
       ...contexte.lecons,
     );
+  }
+
+  if (contexte.consigneRecherche) {
+    morceaux.push('', 'RECHERCHE WEB', contexte.consigneRecherche);
   }
 
   const format = formatJson ? FORMATS[formatJson] : undefined;

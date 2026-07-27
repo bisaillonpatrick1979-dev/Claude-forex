@@ -16,6 +16,11 @@ import {
   verifierAncrage,
 } from '@/lib/orchestration/extraction';
 import type { InstantaneMarche } from '@/lib/orchestration/instantane';
+import {
+  CONSIGNE_RECHERCHE,
+  domainesPour,
+  rechercheAutorisee,
+} from '@/lib/orchestration/sources';
 
 /**
  * Un modèle rend du texte, pas un objet. Ces tests fixent le comportement
@@ -185,6 +190,40 @@ describe('tarifs et contraintes de modèle', () => {
     expect(adaptateur('mock').necessiteCle).toBe(false);
     expect(adaptateur('deepseek').necessiteCle).toBe(true);
     expect(adaptateur('mistral').necessiteCle).toBe(true);
+  });
+});
+
+describe('sources de recherche', () => {
+  it('n’ouvre le web qu’aux rôles dont la matière est hors du graphique', () => {
+    expect(rechercheAutorisee('ANALYSTE_MACRO')).toBe(true);
+    expect(rechercheAutorisee('ANALYSTE_SENTIMENT')).toBe(true);
+    expect(rechercheAutorisee('ANALYSTE_FONDAMENTAL')).toBe(true);
+    // L'analyste technique a déjà tout dans l'instantané : chaque requête
+    // coûterait des tokens sans rien apporter.
+    expect(rechercheAutorisee('ANALYSTE_TECHNIQUE')).toBe(false);
+    expect(rechercheAutorisee('TRADER')).toBe(false);
+  });
+
+  it('restreint la recherche à des domaines nommés', () => {
+    const domaines = domainesPour('ANALYSTE_MACRO');
+    expect(domaines.length).toBeGreaterThan(5);
+    expect(domaines).toContain('federalreserve.gov');
+    expect(domaines).toContain('ecb.europa.eu');
+  });
+
+  it('ne laisse aucun domaine aux rôles sans droit de recherche', () => {
+    expect(domainesPour('ANALYSTE_TECHNIQUE')).toEqual([]);
+  });
+
+  it('exige une date sur toute affirmation tirée du web', () => {
+    // Une nouvelle non datée est inutilisable pour trader : « la dernière
+    // décision de la Fed » peut désigner celle de l'an dernier.
+    expect(CONSIGNE_RECHERCHE).toMatch(/date/i);
+    expect(CONSIGNE_RECHERCHE).toMatch(/aucune information vérifiable/i);
+  });
+
+  it('écarte explicitement les contenus qui promettent des rendements', () => {
+    expect(CONSIGNE_RECHERCHE).toMatch(/rendements/i);
   });
 });
 

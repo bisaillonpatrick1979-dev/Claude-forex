@@ -27,6 +27,9 @@ export interface LigneFournisseurIa {
   readonly modeles: readonly string[];
   readonly indiceVisuel: string | null;
   readonly enregistreeLe: string | null;
+  /** D'où vient la clé effectivement utilisée, ou `null` s'il n'y en a pas. */
+  readonly source: 'BASE' | 'ENVIRONNEMENT' | null;
+  readonly variables: readonly string[];
   readonly agentsUtilisant: number;
   readonly tarifs: readonly { modele: string; entree: number; sortie: number }[];
 }
@@ -52,7 +55,8 @@ function CarteIa({ ligne }: { ligne: LigneFournisseurIa }) {
     demarrer(async () => setRetour(await action()));
   };
 
-  const cleEnPlace = ligne.indiceVisuel !== null;
+  const cleEnPlace = ligne.source !== null;
+  const cleEnvironnement = ligne.source === 'ENVIRONNEMENT';
 
   return (
     <Panneau
@@ -67,13 +71,26 @@ function CarteIa({ ligne }: { ligne: LigneFournisseurIa }) {
                 : 'text-alerte'
           }`}
         >
-          {!ligne.necessiteCle ? 'sans clé' : cleEnPlace ? 'clé en place' : 'clé absente'}
+          {!ligne.necessiteCle
+            ? 'sans clé'
+            : cleEnvironnement
+              ? 'clé serveur'
+              : cleEnPlace
+                ? 'clé en place'
+                : 'clé absente'}
         </span>
       }
     >
       <div className="flex flex-col gap-3 text-sm">
         {ligne.necessiteCle ? (
           <>
+            {cleEnvironnement ? (
+              <p className="rounded border border-hausse/40 bg-hausse/10 px-2.5 py-2 text-xs text-hausse">
+                Une clé est lue dans les variables d’environnement du serveur. Elle est utilisée
+                telle quelle : rien à saisir ici. En enregistrer une ci-dessous la remplacerait.
+              </p>
+            ) : null}
+
             <div className="flex flex-wrap gap-2">
               <input
                 type="password"
@@ -112,7 +129,7 @@ function CarteIa({ ligne }: { ligne: LigneFournisseurIa }) {
               </button>
               <button
                 type="button"
-                disabled={enCours || !cleEnPlace}
+                disabled={enCours || ligne.indiceVisuel === null}
                 onClick={() => lancer(() => supprimerCleIa(ligne.code))}
                 className="rounded border border-bordure px-2.5 py-1.5 text-xs text-texte-attenue transition hover:border-baisse hover:text-baisse disabled:opacity-40"
               >
@@ -172,6 +189,9 @@ function CarteIa({ ligne }: { ligne: LigneFournisseurIa }) {
             : `${ligne.agentsUtilisant} agent(s) l’utilisent.`}
           {ligne.enregistreeLe
             ? ` · clé enregistrée le ${new Date(ligne.enregistreeLe).toLocaleDateString('fr-CA')}`
+            : ''}
+          {ligne.necessiteCle && !cleEnPlace
+            ? ` · variables reconnues : ${ligne.variables.join(', ')}`
             : ''}
         </p>
 

@@ -939,6 +939,80 @@ perdu. Pour aller plus vite, on appelle plus souvent, pas plus gros.
 
 ---
 
+## Décisions (veille continue et accès au web)
+
+### La clé peut venir de deux endroits, et l'écran dit lequel
+
+La voie prévue était la clé chiffrée en base, saisie dans l'onglet « Clés IA ».
+Mais poser sa clé dans les variables d'environnement de l'hébergeur est un
+réflexe si répandu qu'ignorer ce cas produit exactement le symptôme rencontré :
+`ANTHROPIC_API_KEY` bien présente sur Vercel, application aveugle, et rien qui
+explique pourquoi.
+
+`cleDepuisEnvironnement()` lit les noms conventionnels de chaque fournisseur
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`…), pas une convention
+maison — c'est ce que les gens ont déjà tapé. La base reste prioritaire : une
+clé saisie dans l'application est un choix explicite, elle doit primer sur une
+variable posée une fois puis oubliée. L'onglet affiche « clé serveur » quand
+c'est l'environnement qui fournit, et liste les noms reconnus quand il ne
+trouve rien.
+
+Deuxième moitié du symptôme, indépendante : les douze agents sont créés sur le
+fournisseur `mock`. Une clé valide ne les fait pas basculer toute seule — il
+faut le demander, d'où le bouton « Appliquer aux 12 agents ».
+
+### La veille ne délibère qu'à la bougie
+
+Une boucle qui relance un cycle toutes les minutes sur des chiffres inchangés
+produit la même conclusion en la facturant à chaque fois. `veiller()` compare
+donc la dernière bougie disponible à celle qu'a vue le dernier cycle, et ne
+déclenche que s'il y a du nouveau. La comparaison est serveur : un compteur de
+navigateur se remet à zéro à chaque rechargement.
+
+Conséquence assumée : en M5, les agents délibèrent au plus toutes les cinq
+minutes, quelle que soit la fréquence d'appel. Pour les faire travailler plus
+souvent, on descend l'intervalle ou on lance un rejeu accéléré.
+
+### Deux déclencheurs, deux portées
+
+Le pilote automatique de la salle des marchés vit dans l'onglet : le fermer
+l'arrête. C'est la seule option réellement disponible sur le palier gratuit, et
+c'est dit à l'écran plutôt que découvert.
+
+`/api/veille` existe pour un ordonnanceur — cron Vercel, GitHub Actions,
+cron-job.org. Il n'est activé par rien : sans `SECRET_VEILLE` et `PROFIL_VEILLE`
+la route refuse tout. Une route qui déclenche des dépenses ne s'ouvre pas par
+défaut. Le palier gratuit de Vercel plafonne les tâches planifiées à un
+déclenchement par jour ; une veille réellement continue suppose un forfait
+payant ou un ordonnanceur externe. C'est une décision de dépense, elle
+appartient au propriétaire.
+
+### Trois rôles seulement ont accès au web
+
+Macro, sentiment et fondamental : leur matière première est hors du graphique.
+L'analyste technique a déjà tout dans l'instantané — lui donner la recherche
+coûterait des tokens sans rien apporter.
+
+La liste de domaines n'est pas une garantie de vérité et l'application ne
+prétend pas le contraire. C'est un filtre grossier qui écarte les fermes de
+contenu, les sites d'affiliation et les promesses de rendement, au profit de
+banques centrales, d'organismes statistiques, d'agences de presse financière et
+de calendriers économiques établis. Pas de blogs personnels ni de chaînes
+vidéo : leur qualité ne se vérifie pas depuis un nom de domaine, et un mauvais
+conseil bien filmé reste un mauvais conseil.
+
+La consigne exige une date sur chaque affirmation tirée du web. « La dernière
+décision de la Fed » sans horodatage peut désigner celle de l'an dernier. Les
+liens réellement consultés remontent dans le fil : une affirmation invérifiable
+ne vaut pas mieux qu'une hallucination bien tournée.
+
+Les outils web sont demandés en liste blanche de modèles (Opus 5, Sonnet 5).
+Réclamer un outil à un modèle qui ne le connaît pas fait échouer l'appel
+entier, alors que s'en passer ne fait que dégrader la réponse — une analyse
+sans recherche vaut mieux que pas d'analyse.
+
+---
+
 ## Limites annoncées franchement (phase 4b)
 
 ### Quinze ans d'historique : oui en simulé, non en données réelles
