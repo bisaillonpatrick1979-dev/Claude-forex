@@ -111,7 +111,7 @@ export function Atelier({
           réellement placé. C'est la lecture naturelle — on regarde le prix,
           puis on regarde ce qu'on en a fait. */}
       <div className="cockpit-flexible order-1 flex flex-col gap-3 xl:order-2">
-        <section className="cockpit-part-3 flex h-[38vh] min-h-[18rem] max-h-[30rem] flex-col overflow-hidden rounded-lg border border-bordure bg-panneau">
+        <section className="cockpit-part-3 flex h-[46vh] min-h-[22rem] max-h-[36rem] flex-col overflow-hidden rounded-lg border border-bordure bg-panneau">
           <ZoneGraphique
             symboles={symboles}
             marqueurs={marqueurs}

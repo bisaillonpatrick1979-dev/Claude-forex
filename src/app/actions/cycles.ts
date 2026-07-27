@@ -9,6 +9,7 @@ import { chargerInstrument } from '@/lib/execution/persistance';
 import { budgetSuffisant, etatBudget } from '@/lib/ia/budget';
 import { estIntervalle } from '@/lib/marche/intervalles';
 import { obtenirChandeliers } from '@/lib/marche/routeur';
+import { seanceAutorisee, type CodeSeance } from '@/lib/marche/seances-mondiales';
 import type { Intervalle } from '@/lib/marche/types';
 import { lancerCycle } from '@/lib/orchestration/cycle';
 import { reflechirSurPositionsFermees } from '@/lib/orchestration/reflexion';
@@ -161,6 +162,31 @@ export async function veiller(
     return {
       ok: false,
       message: `Plafond quotidien atteint (${budget.depenseUsd.toFixed(2)} $ sur ${budget.plafondUsd.toFixed(2)} $). La veille reprend demain (UTC).`,
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  // ═══ Barrière d'horaire ═══
+  // Placée avant le chargement du marché : inutile de consommer un appel de
+  // fournisseur pour découvrir ensuite que les agents n'ont pas le droit de
+  // travailler à cette heure-là.
+  const { data: profilSeances } = await client
+    .from('profils')
+    .select('seances_agents')
+    .eq('id', profilId)
+    .maybeSingle();
+
+  const verdict = seanceAutorisee(
+    (profilSeances?.seances_agents ?? []) as CodeSeance[],
+    Math.floor(Date.now() / 1000),
+  );
+
+  if (!verdict.autorise) {
+    return {
+      ok: true,
+      message: verdict.raison,
       cycleId: null,
       aTravaille: false,
       derniereBougie: null,

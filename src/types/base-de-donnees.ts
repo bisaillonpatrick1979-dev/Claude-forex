@@ -1300,6 +1300,7 @@ export type Database = {
           mode_operation: Database["public"]["Enums"]["mode_operation"]
           nom_affichage: string | null
           plafond_cout_quotidien_usd: number
+          seances_agents: string[]
         }
         Insert: {
           courriel: string
@@ -1309,6 +1310,7 @@ export type Database = {
           mode_operation?: Database["public"]["Enums"]["mode_operation"]
           nom_affichage?: string | null
           plafond_cout_quotidien_usd?: number
+          seances_agents?: string[]
         }
         Update: {
           courriel?: string
@@ -1318,6 +1320,7 @@ export type Database = {
           mode_operation?: Database["public"]["Enums"]["mode_operation"]
           nom_affichage?: string | null
           plafond_cout_quotidien_usd?: number
+          seances_agents?: string[]
         }
         Relationships: []
       }

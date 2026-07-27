@@ -10,6 +10,7 @@ import { listerSymboles } from '@/lib/marche/symboles';
 import { raisonIndisponibilite } from '@/lib/agents/enveloppe';
 import { chargerEnveloppe } from '@/lib/agents/enveloppe-serveur';
 import { clientAdminOptionnel } from '@/lib/supabase/admin';
+import { seancesOuvertes } from '@/lib/marche/seances-mondiales';
 import { chargerSourcesMarqueurs } from '@/lib/orchestration/marqueurs-serveur';
 import { clientServeur } from '@/lib/supabase/serveur';
 
@@ -54,7 +55,7 @@ export default async function PageSalleDesMarches() {
         .eq('profil_id', profilId)
         .in('statut', ['EN_ATTENTE', 'PARTIELLEMENT_REMPLI'])
         .order('cree_le', { ascending: false }),
-      supabase.from('profils').select('mode_operation').eq('id', profilId).maybeSingle(),
+      supabase.from('profils').select('mode_operation, seances_agents').eq('id', profilId).maybeSingle(),
       supabase
         .from('agents')
         .select('id, nom, couleur')
@@ -227,6 +228,8 @@ export default async function PageSalleDesMarches() {
           classesAutorisees={[
             ...new Set((perimetres ?? []).flatMap((ligne) => ligne.classes_autorisees ?? [])),
           ]}
+          seancesAutorisees={profil?.seances_agents ?? []}
+          seancesOuvertesMaintenant={seancesOuvertes(Math.floor(Date.now() / 1000))}
         />
       ) : (
         <EtatVide message="SUPABASE_SERVICE_ROLE_KEY absente : l’enveloppe des agents ne peut pas être calculée." />

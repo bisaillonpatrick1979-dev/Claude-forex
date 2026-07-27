@@ -1133,6 +1133,62 @@ instrument est analysé au plus une fois par bougie fermée.
 
 ---
 
+## Décisions (séances de marché et ergonomie)
+
+### Les séances sont un choix de méthode, pas une contrainte technique
+
+Le Forex ne ferme pas, mais il ne se comporte pas de la même façon à toute
+heure. Ouvrir à 3 h UTC, c'est trader dans un marché fin où le spread s'élargit
+et où un stop se fait toucher par du bruit. Quatre séances sont proposées —
+Sydney, Tokyo, Londres, New York — avec une pastille verte sur celles qui sont
+ouvertes à l'instant : c'est ce qui permet de comprendre pourquoi la veille
+attend au lieu de croire à une panne.
+
+Rien n'est imposé par défaut : sélection vide vaut « à toute heure », même
+convention que le périmètre d'instruments. Une contrainte appliquée sans avoir
+été demandée est un piège, pas une protection.
+
+Le week-end est traité à part et non comme une séance fermée de plus : du
+vendredi 22 h au dimanche 21 h UTC, le marché ne cote pas, et y autoriser les
+agents n'aurait aucun sens quelle que soit leur sélection.
+
+Approximation assumée : les horaires ne suivent pas l'heure d'été, qui décale
+Londres et New York d'une heure une partie de l'année. L'écart ne change pas la
+nature du raisonnement — « sommes-nous en séance active ? » — et le corriger
+demanderait une table de transitions par zone, pour un bénéfice nul à ce stade.
+
+La barrière est placée **avant** le chargement du marché : inutile de consommer
+un appel de fournisseur pour découvrir ensuite que les agents n'ont pas le
+droit de travailler à cette heure-là.
+
+### « Illimité » ne veut pas dire « sans frein »
+
+La cadence illimitée enchaîne les vérifications dès le retour de la précédente,
+avec une seconde d'écart pour ne pas saturer le navigateur. Elle n'enchaîne pas
+les dépenses : le serveur refuse toujours de délibérer deux fois sur la même
+bougie. Ce qui est illimité, c'est la fréquence à laquelle on demande « y a-t-il
+du nouveau », pas celle des délibérations.
+
+### Le menu se replie
+
+La colonne de navigation prend onze rem qui ne servent qu'une fois par session.
+Repliée, elle n'en garde que trois et rend la largeur à la salle des marchés.
+L'état vit dans `localStorage` — c'est une préférence d'affichage, pas une
+donnée métier.
+
+Le premier rendu est toujours déplié : lire `localStorage` pendant le rendu
+ferait diverger serveur et client, et React remplacerait tout le sous-arbre en
+signalant une erreur d'hydratation. La lecture a lieu après le montage.
+
+### Quatre zéros sans explication ressemblent à une panne
+
+L'enveloppe des agents affichait « 0,00 $ » sur ses quatre cellules tant
+qu'aucun agent n'avait tradé — indistinguable d'un bug. Un état vide explicite
+dit maintenant que ces cellules ne comptent que les trades des agents, et où
+retrouver les ordres passés à la main.
+
+---
+
 ## Limites annoncées franchement (phase 4b)
 
 ### Quinze ans d'historique : oui en simulé, non en données réelles

@@ -26,6 +26,11 @@ import type { Intervalle } from '@/lib/marche/types';
 /** Fréquence à laquelle on demande au serveur s'il y a du nouveau. Ce n'est pas
  *  la fréquence des délibérations : celle-là est dictée par l'intervalle. */
 const CADENCES: readonly { libelle: string; secondes: number }[] = [
+  // « Illimité » n'est pas une boucle sans frein : le prochain appel part dès
+  // le retour du précédent, et le serveur refuse toujours de délibérer deux
+  // fois sur la même bougie. On enchaîne donc les vérifications, pas les
+  // dépenses. Une seconde d'écart évite seulement de saturer le navigateur.
+  { libelle: 'Illimité', secondes: 1 },
   { libelle: '30 s', secondes: 30 },
   { libelle: '1 min', secondes: 60 },
   { libelle: '5 min', secondes: 300 },
@@ -40,7 +45,7 @@ export function PiloteAutomatique({
 }) {
   const router = useRouter();
   const [actif, setActif] = useState(false);
-  const [cadence, setCadence] = useState(1);
+  const [cadence, setCadence] = useState(2);
   const [etat, setEtat] = useState<string | null>(null);
   const [cycles, setCycles] = useState(0);
   const [dernierTour, setDernierTour] = useState<number | null>(null);
@@ -109,7 +114,7 @@ export function PiloteAutomatique({
           return;
         }
 
-        const attente = (CADENCES[cadenceRef.current] ?? CADENCES[1]!).secondes * 1000;
+        const attente = (CADENCES[cadenceRef.current] ?? CADENCES[2]!).secondes * 1000;
         await new Promise((resoudre) => setTimeout(resoudre, attente));
       }
     };
