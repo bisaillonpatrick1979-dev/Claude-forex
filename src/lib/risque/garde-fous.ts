@@ -6,7 +6,13 @@ import type {
   Sens,
 } from '@/lib/execution/types';
 
-import { compterCorrelees, type ExpositionPosition } from './correlation';
+import { compterCorrelees, correlationInstruments, type ExpositionPosition } from './correlation';
+import {
+  evaluerBudgetRisque,
+  risqueAgrege,
+  type PositionRisquee,
+  type SourceCorrelation,
+} from './portefeuille';
 
 /**
  * Garde-fous de risque — fonction pure, testée, appelée avant toute création
@@ -103,6 +109,42 @@ function exposition(instrument: Instrument, sens: Sens): ExpositionPosition {
     deviseBase: instrument.deviseBase,
     deviseCotation: instrument.deviseCotation,
     sens,
+  };
+}
+
+/**
+ * Corrélation entre deux instruments, par leur code.
+ *
+ * L'heuristique par vecteurs de devises est la seule source disponible ici :
+ * le garde-fou reçoit un état de portefeuille, pas des séries de prix. Quand
+ * l'appelant dispose d'un historique, il peut fournir une matrice mesurée —
+ * c'est le rôle de `SourceCorrelation`.
+ */
+function correlationEntreInstruments(
+  positions: readonly PositionAvecInstrument[],
+  propose: Instrument,
+): SourceCorrelation {
+  const connus = new Map<string, Instrument>([[propose.code, propose]]);
+  for (const entree of positions) connus.set(entree.instrument.code, entree.instrument);
+
+  return (a, b) => {
+    const instrumentA = connus.get(a);
+    const instrumentB = connus.get(b);
+    if (!instrumentA || !instrumentB) return 0;
+    return correlationInstruments(
+      {
+        instrument: instrumentA.code,
+        classeActif: instrumentA.classeActif,
+        deviseBase: instrumentA.deviseBase,
+        deviseCotation: instrumentA.deviseCotation,
+      },
+      {
+        instrument: instrumentB.code,
+        classeActif: instrumentB.classeActif,
+        deviseBase: instrumentB.deviseBase,
+        deviseCotation: instrumentB.deviseCotation,
+      },
+    );
   };
 }
 
@@ -274,34 +316,58 @@ export function evaluerGardeFous(
       detail: `${((quantite * parLot) / equite * 100).toFixed(2)} % / ${parametres.risqueMaxParTradePct} %`,
     });
 
-    const risqueOuvert = etat.positions.reduce((somme, entree) => {
-      if (entree.position.stopLoss === null) return somme;
-      return (
-        somme +
-        risqueParLot(
-          entree.instrument,
-          entree.prixCourant,
-          entree.position.stopLoss,
-          entree.tauxCotationVersCompte,
-        ) *
-          entree.position.quantite
-      );
-    }, 0);
+    // Risque déjà engagé, position par position, avant agrégation.
+    const ouvertes: PositionRisquee[] = [];
+    for (const entree of etat.positions) {
+      if (entree.position.stopLoss === null) continue;
+      ouvertes.push({
+        instrument: entree.instrument.code,
+        sens: entree.position.sens,
+        risque:
+          risqueParLot(
+            entree.instrument,
+            entree.prixCourant,
+            entree.position.stopLoss,
+            entree.tauxCotationVersCompte,
+          ) * entree.position.quantite,
+      });
+    }
 
+    // Le budget se compare au risque **agrégé**, pas à la somme. Additionner
+    // facturait le même montant à une couverture parfaite et à un pari doublé :
+    // le premier cas se voyait refuser une position qui ne coûte rien.
+    const correlation = correlationEntreInstruments(etat.positions, demande.instrument);
     const budgetTotal = (parametres.risqueTotalMaxPct / 100) * equite;
-    const disponible = Math.max(0, budgetTotal - risqueOuvert);
-    const maximumTotal = disponible / parLot;
+
+    const budgetDecision = evaluerBudgetRisque(
+      ouvertes,
+      { instrument: demande.instrument.code, sens: demande.sens },
+      budgetTotal,
+      correlation,
+    );
+
+    if (budgetDecision.refuse) {
+      return refuser('RISQUE_TOTAL', 'Risque total simultané', budgetDecision.explication);
+    }
+
+    const maximumTotal = budgetDecision.risqueAutorise / parLot;
     if (quantite > maximumTotal) {
+      const agrege = risqueAgrege(ouvertes, correlation);
       reductions.push(
-        `risque total plafonné à ${parametres.risqueTotalMaxPct} % (déjà ${risqueOuvert.toFixed(2)} engagés)`,
+        `risque agrégé plafonné à ${parametres.risqueTotalMaxPct} % ` +
+          `(${agrege.risqueEffectif.toFixed(2)} engagés sur ${budgetTotal.toFixed(2)}, ` +
+          `pour ${agrege.risqueSomme.toFixed(2)} en somme brute)`,
       );
       quantite = maximumTotal;
     }
+
     controles.push({
       code: 'RISQUE_TOTAL',
       libelle: 'Risque total simultané',
       statut: quantite < demande.quantite ? 'REDUIT' : 'OK',
-      detail: `${(((risqueOuvert + quantite * parLot) / equite) * 100).toFixed(2)} % / ${parametres.risqueTotalMaxPct} %`,
+      detail:
+        `${((budgetDecision.risqueApres / equite) * 100).toFixed(2)} % / ${parametres.risqueTotalMaxPct} % ` +
+        `(diversification : ${(risqueAgrege(ouvertes, correlation).ratioDiversification * 100).toFixed(0)} % du brut)`,
     });
   }
 

@@ -8,7 +8,6 @@ import {
   phiInverse,
   sharpeDeflate,
   sharpeMaximalAttendu,
-  sharpeParPeriode,
   sharpeProbabiliste,
 } from '@/lib/backtest/statistiques';
 import { executerWalkForward, type CandidatWalkForward } from '@/lib/backtest/walk-forward';
