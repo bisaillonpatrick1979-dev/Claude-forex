@@ -858,17 +858,34 @@ un agent — c'est dit plutôt que perdu.
 
 ## Décisions d'interface (tablette et densité)
 
-### La hauteur n'est verrouillée qu'à partir de 1280 px
+### Le mode « cockpit » dépend de la hauteur, pas seulement de la largeur
 
 L'application tenait en `h-dvh` avec un défilement interne par panneau. Sur un
 écran de bureau c'est le bon choix : graphique, fil et portefeuille d'un seul
-coup d'œil. Sur une tablette en paysage, la même règle transforme chaque
-panneau en boîte de trois lignes qu'il faut fouiller.
+coup d'œil.
 
-En dessous de `xl`, c'est désormais la page entière qui défile et les panneaux
-grandissent avec leur contenu. `Panneau` ne défile plus par défaut : le
-défilement interne est devenu explicite (`defilement`) et reste ignoré sous
-`xl`, même quand il est demandé.
+Première correction, insuffisante : conditionner ce mode à `xl` (1280 px de
+large). Une tablette en paysage est **large mais courte** — elle franchissait
+donc le seuil, recevait la mise en page bureau, et chaque panneau se retrouvait
+écrasé jusqu'à ce que son contenu déborde par-dessus le voisin. Sur une capture
+d'écran, le panneau de rejeu était coupé avant ses boutons de vitesse et son
+texte explicatif recouvrait le P&L du portefeuille.
+
+La condition porte maintenant sur les deux dimensions :
+`@media (min-width: 1280px) and (min-height: 900px)`. Hors de ces conditions,
+retour au flux normal : les panneaux prennent la hauteur de leur contenu et
+c'est la page entière qui défile. Un panneau un peu long vaut mieux qu'un
+panneau illisible.
+
+En cockpit, tous les corps de panneau retrouvent `overflow: auto` — filet de
+sécurité pour qu'un contenu trop long défile chez lui au lieu de recouvrir le
+panneau suivant. C'est ce filet qui manquait et qui a produit les
+chevauchements.
+
+Piège associé : le conteneur du graphique ne peut pas passer en `height: auto`
+hors cockpit. Le canevas de lightweight-charts est positionné, il ne donne
+aucune hauteur à son parent — le graphique s'effondrerait à zéro. Il garde donc
+une hauteur explicite (`60vh`), que le cockpit remplace par 100 %.
 
 ### Toutes les tailles de texte sont en rem
 

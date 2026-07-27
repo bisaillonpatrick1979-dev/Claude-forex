@@ -54,6 +54,41 @@ html {
   }
 }
 
+/*
+ * Mode « cockpit » : hauteur verrouillée à l'écran, défilement interne par
+ * panneau, tout visible d'un coup d'œil.
+ *
+ * Il n'a de sens que si l'écran est à la fois LARGE ET HAUT. C'était le défaut
+ * de la version précédente, qui ne regardait que la largeur : une tablette en
+ * paysage est large mais courte, donc elle recevait la mise en page bureau et
+ * chaque panneau se retrouvait écrasé jusqu'à ce que son contenu déborde
+ * par-dessus le voisin.
+ *
+ * Hors de ces conditions, tout revient au flux normal : les panneaux prennent
+ * la hauteur de leur contenu et c'est la page entière qui défile. Un panneau
+ * un peu long vaut mieux qu'un panneau illisible.
+ */
+@media (min-width: 1280px) and (min-height: 900px) {
+  .cockpit-ecran {
+    height: 100dvh;
+  }
+
+  .cockpit-flexible {
+    min-height: 0;
+  }
+
+  .cockpit-plein {
+    height: 100%;
+  }
+
+  /* Filet de sécurité : en cockpit, un contenu trop long défile dans son
+     panneau au lieu de recouvrir celui d'en dessous. */
+  .corps-panneau {
+    min-height: 0;
+    overflow: auto;
+  }
+}
+
 body {
   background-color: var(--color-fond);
   color: var(--color-texte);

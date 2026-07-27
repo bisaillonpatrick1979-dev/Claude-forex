@@ -68,8 +68,8 @@ export function Atelier({
     // comprise — on veut le graphique puis les agents en premier : ce sont eux
     // qu'on regarde, pas le billet d'ordre. `order` évite de dupliquer le
     // balisage pour obtenir deux dispositions.
-    <div className="grid gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,24rem)]">
-      <div className="order-3 flex flex-col gap-3 xl:order-1 xl:min-h-0">
+    <div className="cockpit-plein cockpit-flexible grid gap-3 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,24rem)]">
+      <div className="cockpit-flexible order-3 flex flex-col gap-3 xl:order-1">
         {panneauFirme}
 
         <Panneau titre="Rejeu historique et vitesse">
@@ -99,7 +99,7 @@ export function Atelier({
         </Panneau>
       </div>
 
-      <section className="order-1 flex h-[60vh] min-h-96 flex-col overflow-hidden rounded-lg border border-bordure bg-panneau xl:order-2 xl:h-auto xl:min-h-0">
+      <section className="cockpit-plein order-1 flex h-[60vh] min-h-96 flex-col overflow-hidden rounded-lg border border-bordure bg-panneau xl:order-2">
         <ZoneGraphique
           symboles={symboles}
           marqueurs={marqueurs}
@@ -111,10 +111,10 @@ export function Atelier({
         />
       </section>
 
-      <div className="order-2 flex flex-col gap-3 xl:order-3 xl:min-h-0">
+      <div className="cockpit-flexible order-2 flex flex-col gap-3 xl:order-3">
         {panneauAgents}
 
-        <Panneau titre="Fil des spécialistes" className="flex-1 xl:min-h-0" defilement>
+        <Panneau titre="Fil des spécialistes" className="min-h-[28rem] flex-1">
           <FilSpecialistes
             profilId={profilId}
             symbole={symbole}
