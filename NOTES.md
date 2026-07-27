@@ -625,6 +625,22 @@ Le scaffold installe Tailwind **v4**, configuré en CSS (`@theme` dans `globals.
 
 ---
 
+### Un `const` lu avant sa déclaration ne casse que la production
+
+Le journal des placements utilisait `devise`, déclarée quinze lignes plus bas.
+La lecture avait lieu dans une fonction fléchée passée à `map` : TypeScript ne
+voit rien à redire — la variable existe dans la portée — et le lint par défaut
+non plus. L'erreur ne sort qu'à l'exécution, sur le déploiement, sous la forme
+parfaitement illisible « Cannot access 'G' before initialization », le nom
+étant celui produit par la minification.
+
+Diagnostic par les journaux d'exécution Vercel plutôt qu'à la lecture : la pile
+désignait un `Array.map` de la page, ce qui suffisait à pointer le coupable.
+
+`@typescript-eslint/no-use-before-define` est activée pour les variables. La
+faute est maintenant refusée au lint, donc avant le déploiement. Vérifiée sur
+un cas reproduisant exactement le motif.
+
 ## Dettes techniques assumées
 
 - **`.env.local` du dépôt local** contient l'URL et la clé publiable Supabase (toutes deux
