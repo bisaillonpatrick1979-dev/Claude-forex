@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { budgetSuffisant, etatBudget } from '@/lib/ia/budget';
 import { estIntervalle } from '@/lib/marche/intervalles';
 import type { Intervalle } from '@/lib/marche/types';
+import { etatArret } from '@/lib/orchestration/arret';
 import { lancerCycle } from '@/lib/orchestration/cycle';
 import { clientAdminOptionnel } from '@/lib/supabase/admin';
 
@@ -78,6 +79,18 @@ export async function GET(requete: NextRequest) {
       ok: true,
       aTravaille: false,
       message: `Plafond quotidien atteint (${budget.depenseUsd.toFixed(2)} $ sur ${budget.plafondUsd.toFixed(2)} $).`,
+    });
+  }
+
+  // Le kill switch doit couper l'ordonnanceur aussi. Sinon un cron continue de
+  // faire délibérer une firme que son propriétaire a explicitement arrêtée —
+  // et c'est justement le chemin qu'aucun onglet fermé n'interrompt.
+  const arret = await etatArret(client, profilId);
+  if (arret.gele) {
+    return NextResponse.json({
+      ok: true,
+      aTravaille: false,
+      message: arret.raison ?? 'Firme arrêtée.',
     });
   }
 

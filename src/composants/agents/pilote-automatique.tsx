@@ -16,11 +16,20 @@ import type { Intervalle } from '@/lib/marche/types';
  * faite côté serveur, pas ici — un compteur de navigateur se remet à zéro à
  * chaque rechargement de page.
  *
- * Limite à dire franchement : cette boucle vit dans l'onglet. Fermez-le et la
- * veille s'arrête. Une veille qui survit à la fermeture du navigateur exige un
- * ordonnanceur côté serveur, que le palier gratuit de l'hébergeur ne fournit
- * pas au-delà d'un déclenchement quotidien. Le point d'entrée existe déjà
- * (`/api/veille`) pour le jour où ce sera possible.
+ * Limite à dire franchement : cette boucle vit dans l'onglet. Le fermer
+ * empêche le tour suivant — mais **n'interrompt pas** celui qui est déjà parti.
+ * Une action serveur ne s'annule pas parce que le navigateur a raccroché : le
+ * cycle en cours va jusqu'au bout, écrit ses lignes et facture ses appels. Une
+ * dizaine d'appels, une minute environ. C'est normal, et c'est ce qu'on voit
+ * quand on croit avoir tout arrêté.
+ *
+ * Le seul frein qui ne dépend d'aucun onglet est le kill switch : il est en
+ * base, donc il vaut depuis n'importe quel appareil, y compris pour un onglet
+ * resté ouvert ailleurs ou un ordonnanceur externe.
+ *
+ * Une veille qui survit à la fermeture du navigateur exige un ordonnanceur côté
+ * serveur, que le palier gratuit de l'hébergeur ne fournit pas au-delà d'un
+ * déclenchement quotidien. Le point d'entrée existe déjà (`/api/veille`).
  */
 
 /** Fréquence à laquelle on demande au serveur s'il y a du nouveau. Ce n'est pas
@@ -184,7 +193,9 @@ export function PiloteAutomatique({
       ) : (
         <p className="text-xs text-texte-attenue">
           En veille continue, les agents analysent d’eux-mêmes à chaque bougie fermée. La boucle
-          vit dans cet onglet : le fermer arrête la veille.
+          vit dans cet onglet : le fermer empêche le tour suivant, mais n’interrompt pas le cycle
+          déjà parti — il va au bout côté serveur. Pour tout arrêter depuis n’importe où, utiliser
+          le kill switch.
         </p>
       )}
 

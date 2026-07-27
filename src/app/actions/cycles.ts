@@ -12,6 +12,7 @@ import { estIntervalle } from '@/lib/marche/intervalles';
 import { obtenirChandeliers } from '@/lib/marche/routeur';
 import { seanceAutorisee, type CodeSeance } from '@/lib/marche/seances-mondiales';
 import type { Intervalle } from '@/lib/marche/types';
+import { etatArret } from '@/lib/orchestration/arret';
 import { lancerCycle } from '@/lib/orchestration/cycle';
 import { reflechirSurPositionsFermees } from '@/lib/orchestration/reflexion';
 import { limiterDebit } from '@/lib/securite/limitation-debit';
@@ -75,6 +76,14 @@ export async function lancerCycleAgents(
       message: 'SUPABASE_SERVICE_ROLE_KEY absente côté serveur.',
       cycleId: null,
     };
+  }
+
+  // Avant la dépense, pas après : un cycle lancé sur un portefeuille gelé
+  // facture douze appels pour produire des propositions que les garde-fous
+  // rejetteront toutes.
+  const arret = await etatArret(client, profilId);
+  if (arret.gele) {
+    return { ok: false, message: arret.raison ?? 'Firme arrêtée.', cycleId: null };
   }
 
   const resultat = await lancerCycle({
@@ -158,13 +167,29 @@ export async function veiller(
     };
   }
 
-  // Budget d'abord : inutile de charger le marché pour découvrir ensuite qu'on
-  // ne peut rien dépenser.
+  // Arrêt d'urgence d'abord : c'est le seul frein qui doit fonctionner depuis
+  // n'importe quel appareil, y compris quand l'onglet qui a lancé la veille a
+  // été fermé sans que la boucle ait eu le temps de s'arrêter.
+  const arret = await etatArret(client, profilId);
+  if (arret.gele) {
+    return {
+      ok: false,
+      message: arret.raison ?? 'Firme arrêtée.',
+      cycleId: null,
+      aTravaille: false,
+      derniereBougie: null,
+    };
+  }
+
+  // Budget ensuite : inutile de charger le marché pour découvrir qu'on ne peut
+  // rien dépenser.
   const budget = await etatBudget(client, profilId);
   if (!budgetSuffisant(budget)) {
     return {
       ok: false,
-      message: `Plafond quotidien atteint (${budget.depenseUsd.toFixed(2)} $ sur ${budget.plafondUsd.toFixed(2)} $). La veille reprend demain (UTC).`,
+      message:
+        `Plafond quotidien atteint (${budget.depenseUsd.toFixed(2)} $ sur ${budget.plafondUsd.toFixed(2)} $). ` +
+        `La veille reprend au prochain minuit — ${budget.libelleFuseau}.`,
       cycleId: null,
       aTravaille: false,
       derniereBougie: null,
