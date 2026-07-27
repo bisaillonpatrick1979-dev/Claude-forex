@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { lireCle } from '@/lib/marche/cles';
 import type { Database } from '@/types/base-de-donnees';
 
+import { cleDepuisEnvironnement } from './appel';
 import { embeddingOpenAI } from './openai';
 
 type Client = SupabaseClient<Database>;
@@ -83,7 +84,7 @@ export async function methodeActive(
   client: Client,
   profilId: string,
 ): Promise<MethodeEmbedding> {
-  const cle = await lireCle(client, profilId, 'openai');
+  const cle = (await lireCle(client, profilId, 'openai')) ?? cleDepuisEnvironnement('openai');
   return cle ? 'openai-3-small' : 'lexical-1536';
 }
 
@@ -100,7 +101,7 @@ export async function calculerEmbedding(
   texte: string,
   signal?: AbortSignal,
 ): Promise<Embedding> {
-  const cle = await lireCle(client, profilId, 'openai');
+  const cle = (await lireCle(client, profilId, 'openai')) ?? cleDepuisEnvironnement('openai');
 
   if (!cle) {
     return { vecteur: embeddingLexical(texte), methode: 'lexical-1536' };

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { adaptateur, estFournisseurLLM, FOURNISSEURS_LLM } from '@/lib/ia';
+import { cleDepuisEnvironnement, variablesReconnues } from '@/lib/ia/appel';
 import { MODELES_PAR_FOURNISSEUR } from '@/lib/ia/tarifs';
 import type { FournisseurLLM } from '@/lib/ia/types';
 import { enregistrerCle, lireCle, supprimerCle } from '@/lib/marche/cles';
@@ -128,11 +129,15 @@ export async function testerCleIa(fournisseur: string): Promise<ResultatCleIa> {
   if (!client) return { ok: false, message: CONFIG_MANQUANTE };
 
   const cle = implementation.necessiteCle
-    ? ((await lireCle(client, profilId, fournisseur)) ?? undefined)
+    ? ((await lireCle(client, profilId, fournisseur)) ??
+      cleDepuisEnvironnement(fournisseur as FournisseurLLM))
     : undefined;
 
   if (implementation.necessiteCle && !cle) {
-    return { ok: false, message: 'Aucune clé enregistrée pour ce fournisseur.' };
+    return {
+      ok: false,
+      message: `Aucune clé : ni enregistrée ici, ni dans ${variablesReconnues(fournisseur as FournisseurLLM).join(' ou ')}.`,
+    };
   }
 
   // Le modèle le moins cher de la grille : un test ne doit pas coûter le prix
@@ -190,7 +195,9 @@ export async function appliquerModeleATousLesAgents(
   if (!client) return { ok: false, message: CONFIG_MANQUANTE };
 
   if (fournisseur !== 'mock') {
-    const cle = await lireCle(client, profilId, fournisseur);
+    const cle =
+      (await lireCle(client, profilId, fournisseur)) ??
+      cleDepuisEnvironnement(fournisseur as FournisseurLLM);
     if (!cle) {
       return {
         ok: false,

@@ -42,6 +42,8 @@ export interface ParametresAppel {
   readonly messages: readonly MessageLLM[];
   readonly formatJson?: string | null;
   readonly contexteDeterministe?: ContexteDeterministe | null;
+  readonly rechercheWeb?: boolean;
+  readonly domainesAutorises?: readonly string[];
   readonly signal?: AbortSignal;
 }
 
@@ -51,18 +53,57 @@ export interface ResultatAppel extends ReponseLLM {
   readonly coutUsd: number | null;
 }
 
+/**
+ * Clés lisibles dans l'environnement du serveur.
+ *
+ * La voie normale est la clé chiffrée en base, saisie dans l'onglet « Clés IA ».
+ * Mais poser sa clé dans les variables d'environnement de l'hébergeur est un
+ * réflexe si répandu qu'ignorer ce cas produit exactement le symptôme
+ * rencontré : la clé est bien là, l'application ne la voit pas, et rien
+ * n'explique pourquoi.
+ *
+ * Ordre volontaire : la base d'abord. Une clé saisie dans l'application est un
+ * choix explicite de l'utilisateur ; elle doit primer sur une variable posée
+ * une fois puis oubliée.
+ *
+ * Les noms suivent la convention de chaque fournisseur, pas une convention
+ * maison : c'est ce que les gens ont déjà tapé.
+ */
+const VARIABLES_PAR_FOURNISSEUR: Readonly<Record<FournisseurLLM, readonly string[]>> = {
+  anthropic: ['ANTHROPIC_API_KEY', 'CLE_API_ANTHROPIC'],
+  openai: ['OPENAI_API_KEY', 'CLE_API_OPENAI'],
+  google: ['GOOGLE_API_KEY', 'GEMINI_API_KEY', 'CLE_API_GOOGLE'],
+  deepseek: ['DEEPSEEK_API_KEY', 'CLE_API_DEEPSEEK'],
+  mistral: ['MISTRAL_API_KEY', 'CLE_API_MISTRAL'],
+  mock: [],
+};
+
+export function cleDepuisEnvironnement(fournisseur: FournisseurLLM): string | undefined {
+  for (const nom of VARIABLES_PAR_FOURNISSEUR[fournisseur]) {
+    const valeur = process.env[nom]?.trim();
+    if (valeur) return valeur;
+  }
+  return undefined;
+}
+
+/** Noms des variables reconnues, pour les afficher dans les réglages. */
+export function variablesReconnues(fournisseur: FournisseurLLM): readonly string[] {
+  return VARIABLES_PAR_FOURNISSEUR[fournisseur];
+}
+
 export async function appelerModele(parametres: ParametresAppel): Promise<ResultatAppel> {
   const { client, profilId, agent } = parametres;
   const implementation = adaptateur(agent.fournisseur);
 
   const cle = implementation.necessiteCle
-    ? ((await lireCle(client, profilId, agent.fournisseur)) ?? undefined)
+    ? ((await lireCle(client, profilId, agent.fournisseur)) ??
+      cleDepuisEnvironnement(agent.fournisseur))
     : undefined;
 
   if (implementation.necessiteCle && !cle) {
     const erreur = new ErreurLLM(
       agent.fournisseur,
-      `Aucune clé ${implementation.nom} enregistrée : cet agent ne peut pas être appelé.`,
+      `Aucune clé ${implementation.nom} : ni dans l'onglet « Clés IA », ni dans ${variablesReconnues(agent.fournisseur).join(' ou ')}.`,
     );
     await journaliser(parametres, null, erreur.message);
     throw erreur;
@@ -78,6 +119,8 @@ export async function appelerModele(parametres: ParametresAppel): Promise<Result
     temperature: Number.isFinite(agent.temperature) ? agent.temperature : null,
     formatJson: parametres.formatJson ?? null,
     contexteDeterministe: parametres.contexteDeterministe ?? null,
+    rechercheWeb: parametres.rechercheWeb ?? false,
+    domainesAutorises: parametres.domainesAutorises,
     signal: parametres.signal,
   };
 

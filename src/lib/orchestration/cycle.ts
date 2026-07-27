@@ -34,6 +34,7 @@ import {
   resumerPourSuite,
 } from './invites';
 import { reflechirSurPositionsFermees } from './reflexion';
+import { CONSIGNE_RECHERCHE, domainesPour, rechercheAutorisee } from './sources';
 import {
   indexerStrategiesManquantes,
   recupererLecons,
@@ -306,6 +307,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
     formatJson: string | null,
     strategies: readonly string[] = strategiesGenerales.map((extrait) => extrait.rendu),
   ): Promise<{ contenu: string; appel: ResultatAppel } | { erreur: string }> => {
+    const chercheSurLeWeb = rechercheAutorisee(agent.role);
     const blocage = compteur.obstacle();
     if (blocage) return { erreur: blocage };
 
@@ -332,12 +334,20 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
           tokensMax: agent.tokensMax,
         },
         systeme: construireSysteme(
-          { ...contexteCommun, mandat: agent.mandat, nomAgent: agent.nom, strategies },
+          {
+            ...contexteCommun,
+            mandat: agent.mandat,
+            nomAgent: agent.nom,
+            strategies,
+            consigneRecherche: chercheSurLeWeb ? CONSIGNE_RECHERCHE : null,
+          },
           formatJson,
         ),
         messages,
         formatJson,
         contexteDeterministe: contexteMock,
+        rechercheWeb: chercheSurLeWeb,
+        domainesAutorises: domainesPour(agent.role),
       });
 
       compteur.enregistrer(appel);
@@ -345,6 +355,9 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
         fournisseur: agent.fournisseur,
         modele: appel.modele,
         tronquee: appel.tronquee,
+        // Les sources consultées suivent le message : une affirmation tirée du
+        // web doit pouvoir être vérifiée d'un clic.
+        sources: appel.sources ?? [],
       });
 
       return { contenu: appel.contenu, appel };

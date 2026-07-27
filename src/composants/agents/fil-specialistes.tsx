@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { debrieferPositions, lancerCycleAgents } from '@/app/actions/cycles';
+import { PiloteAutomatique } from '@/composants/agents/pilote-automatique';
 import { EtatVide } from '@/composants/ui/panneau';
+import type { Intervalle } from '@/lib/marche/types';
 import { clientNavigateur } from '@/lib/supabase/client';
 import type { Database } from '@/types/base-de-donnees';
 
@@ -53,7 +55,7 @@ export function FilSpecialistes({
 }: {
   profilId: string;
   symbole: string;
-  intervalle: string;
+  intervalle: Intervalle;
   agents: readonly AgentAffiche[];
   /** Raison pour laquelle les agents ne peuvent rien engager, s'il y en a une. */
   blocage: string | null;
@@ -224,6 +226,8 @@ export function FilSpecialistes({
         </p>
       ) : null}
 
+      <PiloteAutomatique symbole={symbole} intervalle={intervalle} />
+
       <div ref={zoneRef} className="min-h-0 flex-1 space-y-2 overflow-auto pr-1">
         {messagesDuCycle.length === 0 ? (
           <EtatVide message="Aucune discussion pour l’instant. Réunissez les agents pour lancer un cycle." />
@@ -234,6 +238,36 @@ export function FilSpecialistes({
         )}
       </div>
     </div>
+  );
+}
+
+/** Liens réellement consultés par l'agent. Une affirmation tirée du web sans
+ *  moyen de la vérifier ne vaut pas mieux qu'une hallucination bien tournée. */
+function SourcesConsultees({ metadonnees }: { metadonnees: unknown }) {
+  const brut = (metadonnees as { sources?: unknown } | null)?.sources;
+  if (!Array.isArray(brut) || brut.length === 0) return null;
+
+  const sources = brut.filter(
+    (source): source is { titre: string; url: string } =>
+      typeof (source as { url?: unknown })?.url === 'string',
+  );
+  if (sources.length === 0) return null;
+
+  return (
+    <ul className="mt-1.5 flex flex-col gap-0.5 border-t border-bordure/60 pt-1.5">
+      {sources.map((source) => (
+        <li key={source.url}>
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[0.72rem] text-accent underline-offset-2 hover:underline"
+          >
+            {source.titre || source.url}
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -269,6 +303,8 @@ function Intervention({
           {message.contenu}
         </p>
       )}
+
+      <SourcesConsultees metadonnees={message.metadonnees} />
 
       {message.cout_usd !== null && message.cout_usd > 0 ? (
         <p className="chiffre mt-1 text-[0.7rem] text-texte-attenue/70">
