@@ -1878,6 +1878,14 @@ export type Database = {
           resume: string
         }[]
       }
+      reinitialiser_firme: {
+        Args: {
+          p_capital?: number
+          p_conserver_lecons?: boolean
+          p_effacer_historique?: boolean
+        }
+        Returns: Json
+      }
     }
     Enums: {
       classe_actif:
