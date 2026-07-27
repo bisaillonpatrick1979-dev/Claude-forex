@@ -19,6 +19,9 @@ export interface LigneFournisseur {
   readonly necessiteCle: boolean;
   readonly intervalles: readonly string[];
   readonly indiceVisuel: string | null;
+  /** Vrai quand une clé est lue dans l'environnement du serveur. */
+  readonly cleEnvironnement: boolean;
+  readonly variablesEnvironnement: readonly string[];
   readonly quotaLimite: number | null;
   readonly quotaUtilise: number;
   readonly fenetre: string;
@@ -109,6 +112,20 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
           </button>
         </div>
       </div>
+
+      {ligne.necessiteCle && ligne.cleEnvironnement ? (
+        <p className="mt-3 rounded border border-hausse/40 bg-hausse/10 px-2.5 py-1.5 text-xs text-hausse">
+          Une clé est lue dans les variables d’environnement du serveur. Elle est utilisée telle
+          quelle — rien à saisir ici. En enregistrer une ci-dessous la remplacerait.
+        </p>
+      ) : null}
+
+      {ligne.necessiteCle && !ligne.cleEnvironnement && ligne.variablesEnvironnement.length > 0 ? (
+        <p className="chiffre mt-3 text-[0.72rem] text-texte-attenue/70">
+          Variante sans chiffrement : poser {ligne.variablesEnvironnement[0]} dans les variables
+          d’environnement de l’hébergeur.
+        </p>
+      ) : null}
 
       {ligne.necessiteCle ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
