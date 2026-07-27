@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { chargerEtat, chargerInstrument } from '@/lib/execution/persistance';
 import { appelerModele, type ResultatAppel } from '@/lib/ia/appel';
 import { budgetSuffisant, etatBudget, type EtatBudget } from '@/lib/ia/budget';
+import { methodeActive } from '@/lib/ia/embeddings';
 import { ErreurLLM, type ContexteDeterministe, type MessageLLM } from '@/lib/ia/types';
 import { obtenirChandeliers } from '@/lib/marche/routeur';
 import type { Intervalle } from '@/lib/marche/types';
@@ -32,7 +33,11 @@ import {
   messagePortefeuille,
   resumerPourSuite,
 } from './invites';
-import { recupererLecons, recupererStrategies } from './recuperation';
+import {
+  indexerStrategiesManquantes,
+  recupererLecons,
+  recupererStrategies,
+} from './recuperation';
 
 import { soumettreProposition } from '@/app/actions/propositions';
 
@@ -276,6 +281,10 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
     `RSI ${instantane.indicateurs.rsi14 ?? 'inconnu'}`,
     instantane.classeActif,
   ].join(' — ');
+
+  // Les playbooks livrés arrivent sans vecteur : on les indexe au premier
+  // cycle, sinon la recherche ne rendrait jamais rien.
+  await indexerStrategiesManquantes(client, profilId, await methodeActive(client, profilId));
 
   const [lecons, strategiesGenerales] = await Promise.all([
     recupererLecons(client, profilId, requeteMemoire, instrumentCharge.symboleId, 3),

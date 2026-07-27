@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { calculerEmbedding, versLitteral } from '@/lib/ia/embeddings';
+import { calculerEmbedding, versLitteral, type MethodeEmbedding } from '@/lib/ia/embeddings';
 import type { Database } from '@/types/base-de-donnees';
 
 type Client = SupabaseClient<Database>;
@@ -30,6 +30,72 @@ export interface ExtraitLecon {
   readonly titre: string;
   readonly rendu: string;
   readonly distance: number;
+}
+
+/**
+ * Indexe les playbooks qui n'ont pas encore d'embedding dans la méthode
+ * courante.
+ *
+ * Les six playbooks livrés arrivent sans vecteur : leur contenu est fixe, mais
+ * la méthode d'embedding dépend du profil (clé OpenAI ou non), donc elle ne
+ * peut pas être calculée dans une migration. On le fait au premier cycle, une
+ * fois, plutôt que d'exiger une action manuelle que personne ne pensera à
+ * lancer — et plutôt que de laisser la mémoire silencieusement vide.
+ *
+ * Un échec ici ne fait pas échouer le cycle : la firme travaille sans
+ * playbooks, moins bien, et le dira.
+ */
+export async function indexerStrategiesManquantes(
+  client: Client,
+  profilId: string,
+  methode: MethodeEmbedding,
+  maximum = 8,
+): Promise<number> {
+  const { data } = await client
+    .from('strategies')
+    .select('id, code, nom, famille, resume, conditions_marche, regles_entree, regles_sortie, gestion_taille, cas_echec')
+    .or(`profil_id.is.null,profil_id.eq.${profilId}`)
+    .eq('actif', true)
+    .or(`methode_embedding.is.null,methode_embedding.neq.${methode}`)
+    .limit(maximum);
+
+  if (!data || data.length === 0) return 0;
+
+  let indexees = 0;
+  for (const strategie of data) {
+    // Le texte indexé est celui qui décrit *quand* la stratégie s'applique :
+    // c'est ce qu'on cherchera à rapprocher d'un instantané de marché, pas le
+    // nom du playbook.
+    const texte = [
+      strategie.nom,
+      strategie.famille,
+      strategie.resume,
+      strategie.conditions_marche,
+      strategie.regles_entree,
+      strategie.regles_sortie,
+    ].join('\n');
+
+    try {
+      const embedding = await calculerEmbedding(client, profilId, texte);
+      if (embedding.methode !== methode) continue;
+
+      await client
+        .from('strategies')
+        .update({
+          embedding: versLitteral(embedding.vecteur),
+          methode_embedding: embedding.methode,
+        })
+        .eq('id', strategie.id);
+
+      indexees += 1;
+    } catch {
+      // Une clé refusée ou un quota épuisé arrête l'indexation : insister
+      // enchaînerait des appels facturés voués à échouer.
+      break;
+    }
+  }
+
+  return indexees;
 }
 
 export async function recupererStrategies(
