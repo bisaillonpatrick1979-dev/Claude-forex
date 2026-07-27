@@ -22,8 +22,8 @@ const PARAMETRES: ParametresRisque = {
   risqueMaxParTradePct: 1,
   risqueTotalMaxPct: 5,
   positionsMax: 5,
-  positionsCorreleesMax: 2,
-  seuilCorrelation: 0.7,
+  partPositionMaxPct: 50,
+  partFacteurMaxPct: 50,
   perteJournaliereMaxPct: 3,
   drawdownMaxPct: 15,
   levierMax: 10,
@@ -175,14 +175,75 @@ describe('refus francs', () => {
     expect(decision.raison).toMatch(/maximum 5/);
   });
 
-  it('refuse une troisième position fortement corrélée', () => {
+  it('refuse d’empiler une troisième fois le même pari', () => {
+    // Deux longs EUR/USD de 3 lots risquent 1 500 chacun : 3 000 d'exposition
+    // nette sur chaque devise, pour un plafond de 50 % du budget (2 500).
+    // L'ancien compteur refusait sur le nombre, quelle que soit la taille ;
+    // celui-ci refuse sur la charge réelle.
+    const decision = evaluerGardeFous(
+      demande(),
+      etat({
+        positions: [
+          positionOuverte({ quantite: 3 }),
+          positionOuverte({ id: 'p2', quantite: 3 }),
+        ],
+      }),
+      PARAMETRES,
+    );
+    expect(decision.decision).toBe('REFUSE');
+    expect(decision.raison).toMatch(/concentration/i);
+  });
+
+  it('accepte trois fois le même pari quand la charge reste faible', () => {
+    // Même configuration, mais 1 lot par position : 1 000 d'exposition nette
+    // sur 2 500 autorisés. Le compteur refusait ce cas sans regarder la taille.
     const decision = evaluerGardeFous(
       demande(),
       etat({ positions: [positionOuverte(), positionOuverte({ id: 'p2' })] }),
       PARAMETRES,
     );
+    expect(decision.decision).toBe('APPROUVE');
+  });
+
+  it('n’a pas d’effet de falaise : des corrélations sous l’ancien seuil s’additionnent', () => {
+    // EUR/USD et GBP/USD longs sont corrélés à 0,5 — sous le seuil de 0,70 de
+    // l'ancien compteur, qui les voyait donc comme « zéro position corrélée ».
+    // Ils partagent pourtant la même jambe short USD, qui s'accumule.
+    const gbpusd = { ...EURUSD, code: 'GBPUSD', deviseBase: 'GBP' };
+    const decision = evaluerGardeFous(
+      demande(),
+      etat({
+        positions: [
+          positionOuverte({ quantite: 3 }),
+          {
+            ...positionOuverte({ id: 'p2', quantite: 3, instrument: 'GBPUSD' }),
+            instrument: gbpusd,
+          },
+        ],
+      }),
+      PARAMETRES,
+    );
+
     expect(decision.decision).toBe('REFUSE');
-    expect(decision.raison).toMatch(/corrélée/);
+    expect(decision.raison).toMatch(/USD/);
+  });
+
+  it('autorise une position qui défait la concentration existante', () => {
+    // Même portefeuille saturé, mais dans l'autre sens : la vente réduit
+    // l'exposition nette au lieu de l'aggraver. Un compteur ne pouvait pas
+    // faire cette différence — il ne voyait que « corrélé ».
+    const decision = evaluerGardeFous(
+      demande({ sens: 'VENTE', stopLoss: 1.085 }),
+      etat({
+        positions: [
+          positionOuverte({ quantite: 3 }),
+          positionOuverte({ id: 'p2', quantite: 3 }),
+        ],
+      }),
+      PARAMETRES,
+    );
+
+    expect(decision.decision).not.toBe('REFUSE');
   });
 
   it('accepte une position non corrélée sur une autre classe d’actifs', () => {
@@ -278,7 +339,7 @@ describe('cas nominal', () => {
     expect(codes).toContain('PERTE_JOURNALIERE');
     expect(codes).toContain('EVENEMENT_MACRO');
     expect(codes).toContain('POSITIONS_MAX');
-    expect(codes).toContain('CORRELATION');
+    expect(codes).toContain('CONCENTRATION');
     expect(codes).toContain('RISQUE_TRADE');
     expect(codes).toContain('LEVIER');
   });

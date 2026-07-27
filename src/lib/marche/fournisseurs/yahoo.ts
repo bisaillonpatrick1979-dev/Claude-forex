@@ -92,6 +92,9 @@ export class FournisseurYahoo implements FournisseurDonneesMarche {
       intervalles: Object.keys(INTERVALLES_YAHOO) as Intervalle[],
       necessiteCle: false,
       limiteParAppel: 2000,
+      // Yahoo raisonne en plage relative (« 5y », « max ») et non en date de
+      // fin : impossible de lui demander une tranche précise du passé.
+      fenetreHistorique: false,
     };
   }
 

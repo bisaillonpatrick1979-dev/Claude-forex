@@ -1,12 +1,21 @@
 'use client';
 
 import dynamique from 'next/dynamic';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { creerAnnotation, listerAnnotations } from '@/app/actions/annotations';
+import {
+  annotationVisible,
+  COULEUR_DEFAUT,
+  type Annotation,
+  type Outil,
+  type PointGraphique,
+} from '@/lib/graphique/annotations';
 import { atr, derniereValeur, clotures, rsi } from '@/lib/marche/indicateurs';
 import { INTERVALLES } from '@/lib/marche/intervalles';
 import type { Intervalle } from '@/lib/marche/types';
 
+import { BarreDessin } from './barre-dessin';
 import { INDICATEURS_DEFAUT, type IndicateursActifs, type MarqueurDecision } from './types-graphique';
 import { useChandeliers } from './use-chandeliers';
 
@@ -67,6 +76,9 @@ export function ZoneGraphique({
   const [symboleInterne, setSymboleInterne] = useState(symboleInitial);
   const [intervalleInterne, setIntervalleInterne] = useState<Intervalle>(intervalleInitial);
   const [indicateurs, setIndicateurs] = useState<IndicateursActifs>(INDICATEURS_DEFAUT);
+  const [annotations, setAnnotations] = useState<readonly Annotation[]>([]);
+  const [outil, setOutil] = useState<Outil | null>(null);
+  const [couleur, setCouleur] = useState(COULEUR_DEFAUT);
 
   const symbole = symboleControle ?? symboleInterne;
   const intervalle = intervalleControle ?? intervalleInterne;
@@ -75,6 +87,41 @@ export function ZoneGraphique({
 
   const etat = useChandeliers(symbole, intervalle);
   const decimales = symboles.find((option) => option.code === symbole)?.decimales ?? 5;
+
+  const rechargerAnnotations = useCallback(() => {
+    void listerAnnotations(symbole).then(setAnnotations);
+  }, [symbole]);
+
+  useEffect(rechargerAnnotations, [rechargerAnnotations]);
+
+  // Une annotation liée à une unité de temps ne se montre que sur celle-ci ;
+  // une annotation sans unité suit l'instrument partout. Le filtre est fait
+  // ici pour que le rendu et la liste affichée disent exactement la même chose.
+  const visibles = useMemo(
+    () => annotations.filter((annotation) => annotationVisible(annotation, symbole, intervalle)),
+    [annotations, symbole, intervalle],
+  );
+
+  const tracer = useCallback(
+    (points: readonly PointGraphique[]) => {
+      if (!outil) return;
+      void creerAnnotation({
+        symbole,
+        // Les niveaux et les zones valent sur toutes les unités de temps : un
+        // support ne dépend pas de la loupe avec laquelle on le regarde. Les
+        // tracés dépendants du temps, eux, restent sur leur unité.
+        intervalle: outil === 'NIVEAU' || outil === 'ZONE' ? null : intervalle,
+        outil,
+        points,
+        couleur,
+        libelle: null,
+      }).then((resultat) => {
+        if (resultat.ok) rechargerAnnotations();
+      });
+      setOutil(null);
+    },
+    [outil, symbole, intervalle, couleur, rechargerAnnotations],
+  );
 
   const mesures = useMemo(() => {
     if (etat.chandeliers.length === 0) return { rsi: null, atr: null, dernier: null };
@@ -171,6 +218,18 @@ export function ZoneGraphique({
         </div>
       </div>
 
+      <div className="shrink-0 border-b border-bordure px-2 py-1.5">
+        <BarreDessin
+          annotations={visibles}
+          outil={outil}
+          couleur={couleur}
+          surOutil={setOutil}
+          surCouleur={setCouleur}
+          surChangement={rechargerAnnotations}
+          decimales={decimales}
+        />
+      </div>
+
       {/* Le graphique occupe tout l'espace restant */}
       <div className="min-h-48 flex-1">
         {etat.chandeliers.length > 0 ? (
@@ -180,6 +239,10 @@ export function ZoneGraphique({
             indicateurs={indicateurs}
             marqueurs={marqueurs}
             cleInstrument={`${symbole}|${intervalle}`}
+            annotations={visibles}
+            outil={outil}
+            couleurOutil={couleur}
+            surTracer={tracer}
           />
         ) : (
           <div className="flex h-full items-center justify-center px-4 text-center text-xs text-texte-attenue">

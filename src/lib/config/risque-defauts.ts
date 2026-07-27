@@ -12,9 +12,25 @@ export const RISQUE_DEFAUTS = {
   /** Somme des risques ouverts simultanément. */
   risqueTotalMaxPct: 5,
   positionsMax: 5,
-  /** Parmi les positions ouvertes, combien peuvent être fortement corrélées. */
-  positionsCorreleesMax: 2,
-  seuilCorrelation: 0.7,
+  /**
+   * Part du risque agrégé qu'une seule position peut porter.
+   *
+   * 50 % est le réglage neutre : deux positions de même taille et de même
+   * corrélation en portent exactement la moitié chacune, donc ce plafond
+   * n'entrave jamais un portefeuille équilibré. Il refuse en revanche qu'une
+   * ligne devienne le portefeuille à elle seule.
+   */
+  partPositionMaxPct: 50,
+  /**
+   * Exposition nette maximale d'un facteur — devise ou classe d'actif — en
+   * pourcentage du budget de risque total.
+   *
+   * C'est la contrainte qui remplace le compteur de positions corrélées. Avec
+   * un budget de 5 % et ce plafond, aucune devise ne peut porter plus de 2,5 %
+   * du capital en net : long EUR/USD, long GBP/USD et short USD/CHF ne peuvent
+   * plus s'empiler comme trois paris distincts alors qu'ils n'en font qu'un.
+   */
+  partFacteurMaxPct: 50,
   /** Atteinte : arrêt des agents jusqu'au lendemain. */
   perteJournaliereMaxPct: 3,
   /** Atteinte : arrêt complet, reprise sur intervention manuelle. */

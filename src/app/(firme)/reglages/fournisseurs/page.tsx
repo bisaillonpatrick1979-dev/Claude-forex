@@ -6,6 +6,7 @@ import {
   variablesReconnuesFournisseur,
 } from '@/lib/marche/cles';
 import { fournisseur as adaptateur } from '@/lib/marche/fournisseurs';
+import { etatDepuisLigne } from '@/lib/marche/quotas';
 import { listerSymboles } from '@/lib/marche/symboles';
 import { estCodeFournisseur } from '@/lib/marche/types';
 import { chiffrementConfigure } from '@/lib/securite/chiffrement';
@@ -25,7 +26,7 @@ export default async function PageFournisseurs() {
   const { data: lignes } = await supabase
     .from('fournisseurs_donnees')
     .select(
-      'code, nom, actif, quota_limite, quota_utilise, fenetre_quota, priorite_par_classe, dernier_statut, derniere_erreur, derniere_verification_le',
+      'code, nom, actif, quota_limite, quota_utilise, fenetre_quota, quota_minute_limite, quota_minute_utilise, quota_minute_reinitialise_le, priorite_par_classe, dernier_statut, derniere_erreur, derniere_verification_le',
     )
     .order('code');
 
@@ -59,6 +60,22 @@ export default async function PageFournisseurs() {
       quotaLimite: ligne.quota_limite,
       quotaUtilise: ligne.quota_utilise,
       fenetre: ligne.fenetre_quota,
+      debitLimite: ligne.quota_minute_limite,
+      // Un compteur d'une minute écoulée vaut zéro : afficher « 8/8 » sur une
+      // minute passée ferait croire à un blocage qui n'existe plus.
+      debitUtilise: etatDepuisLigne(
+        {
+          code: ligne.code,
+          quota_limite: ligne.quota_limite,
+          quota_utilise: ligne.quota_utilise,
+          fenetre_quota: ligne.fenetre_quota,
+          quota_reinitialise_le: new Date().toISOString(),
+          quota_minute_limite: ligne.quota_minute_limite,
+          quota_minute_utilise: ligne.quota_minute_utilise,
+          quota_minute_reinitialise_le: ligne.quota_minute_reinitialise_le,
+        },
+        new Date(),
+      ).utiliseCetteMinute,
       dernierStatut: ligne.dernier_statut,
       derniereErreur: ligne.derniere_erreur,
       derniereVerification: ligne.derniere_verification_le,

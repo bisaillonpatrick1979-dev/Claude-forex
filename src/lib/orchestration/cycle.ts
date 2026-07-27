@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { chargerEtat, chargerInstrument } from '@/lib/execution/persistance';
+import { bloc as blocAnnotations } from '@/lib/graphique/annotations';
+import { lireAnnotations } from '@/lib/graphique/depot';
 import { appelerModele, type ResultatAppel } from '@/lib/ia/appel';
 import { budgetSuffisant, etatBudget, type EtatBudget } from '@/lib/ia/budget';
 import { methodeActive } from '@/lib/ia/embeddings';
@@ -159,8 +161,8 @@ async function lireParametresRisque(
     risqueMaxParTradePct: Number(data.risque_max_par_trade_pct),
     risqueTotalMaxPct: Number(data.risque_total_max_pct),
     positionsMax: data.positions_max,
-    positionsCorreleesMax: data.positions_correlees_max,
-    seuilCorrelation: Number(data.seuil_correlation),
+    partPositionMaxPct: Number(data.part_position_max_pct),
+    partFacteurMaxPct: Number(data.part_facteur_max_pct),
     perteJournaliereMaxPct: Number(data.perte_journaliere_max_pct),
     drawdownMaxPct: Number(data.drawdown_max_pct),
     levierMax: Number(data.levier_max),
@@ -189,7 +191,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
   }
 
   const [{ data: profil }, agents, parametres, { data: etatRejeu }] = await Promise.all([
-    client.from('profils').select('mode_operation').eq('id', profilId).maybeSingle(),
+    client.from('profils').select('mode_operation, horizon_trading').eq('id', profilId).maybeSingle(),
     chargerAgents(client, profilId),
     lireParametresRisque(client, profilId),
     client
@@ -205,6 +207,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
   if (agents.length === 0) return echec('Aucun agent actif : le kill switch est peut-être enclenché.');
 
   const mode = profil.mode_operation;
+  const horizon = profil.horizon_trading;
 
   const instrumentCharge = await chargerInstrument(client, symbole);
   if (!instrumentCharge) return echec(`Instrument ${symbole} inconnu.`);
@@ -272,7 +275,13 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
 
   const compteur = new Compteur(cycle.budget_appels_llm, cycle.budget_secondes, budget);
   const sequence: Sequence = { valeur: 0 };
-  const rendu = rendreInstantane(instantane);
+  // Repères tracés à la main sur ce graphique. C'est ce qu'aucune plateforme
+  // commerciale ne fait : chez elles un trait est un pixel, ici c'est une
+  // entrée du raisonnement. Un agent qui propose d'acheter au travers d'une
+  // résistance marquée par le trader doit s'en expliquer.
+  const annotations = await lireAnnotations(client, profilId, symbole, intervalle);
+  const reperes = blocAnnotations(annotations, instantane.dernierPrix, instantane.decimales);
+  const rendu = reperes ? `${rendreInstantane(instantane)}\n\n${reperes}` : rendreInstantane(instantane);
 
   const contexteMock: ContexteDeterministe = {
     symbole: instantane.symbole,
@@ -332,11 +341,12 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
 
   const [lecons, strategiesGenerales] = await Promise.all([
     recupererLecons(client, profilId, requeteMemoire, instrumentCharge.symboleId, 3),
-    recupererStrategies(client, profilId, requeteMemoire, null, 2),
+    recupererStrategies(client, profilId, requeteMemoire, null, 2, horizon),
   ]);
 
   const contexteCommun = {
     modeOperation: mode,
+    horizon,
     lecons: lecons.map((lecon) => lecon.rendu),
   };
 
@@ -374,6 +384,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
           modele: agent.modele,
           temperature: agent.temperature,
           tokensMax: agent.tokensMax,
+          effort: agent.effort,
         },
         systeme: construireSysteme(
           {
@@ -441,7 +452,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
         [messageMarche],
         null,
         agent.familleStrategie
-          ? (await recupererStrategies(client, profilId, requeteMemoire, agent.familleStrategie, 2)).map(
+          ? (await recupererStrategies(client, profilId, requeteMemoire, agent.familleStrategie, 2, horizon)).map(
               (extrait) => extrait.rendu,
             )
           : strategiesGenerales.map((extrait) => extrait.rendu),

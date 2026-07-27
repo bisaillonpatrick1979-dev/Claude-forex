@@ -282,6 +282,34 @@ capture les cas qui comptent : EUR/USD et GBP/USD longs sont corrélés, EUR/USD
 USD/CHF long le sont négativement. Pour les indices, actions et crypto, une valeur par classe.
 Heuristique assumée, remplaçable en phase 6.
 
+### Le compteur de positions corrélées a été remplacé par une contrainte continue
+
+`positions_correlees_max` / `seuil_correlation` comptaient les positions ouvertes dont la
+corrélation avec la position proposée dépassait un seuil. Deux trous, tous deux exploitables :
+
+- **effet de falaise** — trois positions à 0,69 sous un seuil de 0,70 comptaient pour zéro
+  position corrélée : trois fois le même pari, approuvé sans réserve ;
+- **aveuglement aux chaînes** — long EUR/USD, long GBP/USD et short USD/CHF n'ont aucun
+  couple au-dessus du seuil, mais forment un seul pari short USD, en triple.
+
+`lib/risque/concentration.ts` les remplace par deux mesures continues, résolues exactement
+plutôt qu'itérées :
+
+- `part_position_max_pct` plafonne la part du risque agrégé qu'une position peut porter. La
+  part vaut `q(b+q) / (c+2bq+q²)` ; l'inégalité se réarrange en un trinôme du second degré
+  dont une seule racine est positive.
+- `part_facteur_max_pct` plafonne l'exposition **nette** d'un facteur — devise pour le Forex,
+  classe d'actif sinon — en pourcentage du budget de risque. L'exposition est affine en la
+  taille, donc le plafond est direct : `q ≤ L − u·base`. Quand la position réduit un facteur
+  déjà chargé, `u·base` est négatif et le plafond **s'élargit** : un compteur ne pouvait pas
+  voir qu'une position corrélée peut réduire le risque.
+
+Le nombre de paris effectifs, `(Σ risques / σ)²`, est publié comme diagnostic. Piège évité :
+ce n'est **pas** un Herfindahl sur les contributions de risque. Trois positions de même taille
+et de même corrélation en portent un tiers chacune par symétrie, quelle que soit cette
+corrélation — un Herfindahl y verrait trois paris là où il n'y en a qu'un. C'est le ratio de
+diversification qui porte l'information de corrélation, pas la répartition des contributions.
+
 ---
 
 ## Décisions d'architecture (phase 4a)

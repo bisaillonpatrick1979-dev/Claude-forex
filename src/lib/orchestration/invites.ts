@@ -1,3 +1,4 @@
+import { consignesHorizon, type Horizon } from '@/lib/agents/horizons';
 import type { EtatPortefeuille } from '@/lib/execution/types';
 
 import type { InstantaneMarche } from './instantane';
@@ -27,6 +28,8 @@ export interface ContexteFirme {
   readonly mandat: string;
   readonly nomAgent: string;
   readonly modeOperation: string;
+  /** Horizon pratiqué par la firme. Absent en débrief, qui n'ouvre rien. */
+  readonly horizon?: Horizon | null;
   readonly strategies: readonly string[];
   readonly lecons: readonly string[];
   /** Consigne de recherche web, quand le rôle y a droit. */
@@ -62,6 +65,13 @@ export function construireSysteme(
     '',
     `Mode d’opération courant : ${contexte.modeOperation}. Le portefeuille est simulé ; aucun ordre réel n’est transmis à un courtier.`,
   ];
+
+  // L'horizon vient avant les playbooks : il conditionne lesquels ont un sens.
+  // Un retour à la moyenne sur quinze minutes n'a rien à dire à un trader de
+  // position, et l'agent doit le savoir avant de lire le playbook.
+  if (contexte.horizon) {
+    morceaux.push('', consignesHorizon(contexte.horizon));
+  }
 
   if (contexte.strategies.length > 0) {
     morceaux.push(

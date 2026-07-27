@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ResultatAppel } from '@/lib/ia/appel';
-import type { FournisseurLLM } from '@/lib/ia/types';
+import { estNiveauEffort, type FournisseurLLM, type NiveauEffort } from '@/lib/ia/types';
 import type { Database } from '@/types/base-de-donnees';
 
 type Client = SupabaseClient<Database>;
@@ -27,6 +27,7 @@ export interface AgentCharge {
   readonly modele: string;
   readonly temperature: number;
   readonly tokensMax: number;
+  readonly effort: NiveauEffort | null;
   readonly mandat: string;
   readonly familleStrategie: string | null;
 }
@@ -38,7 +39,7 @@ export async function chargerAgents(
   const { data } = await client
     .from('agents')
     .select(
-      'id, cle, nom, role, couleur, fournisseur_llm, modele, temperature, tokens_max, famille_strategie, actif, mandats_agents(contenu, version, actif)',
+      'id, cle, nom, role, couleur, fournisseur_llm, modele, temperature, tokens_max, effort_llm, famille_strategie, actif, mandats_agents(contenu, version, actif)',
     )
     .eq('profil_id', profilId)
     .eq('actif', true)
@@ -58,6 +59,7 @@ export async function chargerAgents(
       modele: ligne.modele,
       temperature: Number(ligne.temperature),
       tokensMax: ligne.tokens_max,
+      effort: estNiveauEffort(ligne.effort_llm) ? ligne.effort_llm : null,
       mandat: dernier?.contenu ?? `Tu es ${ligne.nom} dans une firme de trading.`,
       familleStrategie: ligne.famille_strategie,
     };

@@ -96,6 +96,7 @@ export class FournisseurMock implements FournisseurDonneesMarche {
       intervalles: ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1'],
       necessiteCle: false,
       limiteParAppel: 5000,
+      fenetreHistorique: true,
     };
   }
 
@@ -121,7 +122,11 @@ export function genererSerie(
   const base = PRIX_BASE[demande.symbole] ?? PRIX_BASE_DEFAUT;
   const graine = grainePourSymbole(demande.symbole + demande.intervalle);
   const duree = dureeSecondes(demande.intervalle);
-  const derniereOuverture = debutBougie(maintenant, demande.intervalle);
+  // `avant` est exclusif : la bougie la plus récente rendue est celle qui
+  // précède, sinon deux tranches consécutives d'un import se chevaucheraient
+  // d'une bougie.
+  const plafond = demande.avant === undefined ? maintenant : demande.avant - duree;
+  const derniereOuverture = debutBougie(plafond, demande.intervalle);
   const limite = Math.max(1, Math.min(demande.limite, 5000));
 
   const chandeliers: Chandelier[] = [];

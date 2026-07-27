@@ -63,6 +63,7 @@ export class FournisseurTwelveData implements FournisseurDonneesMarche {
       intervalles: Object.keys(INTERVALLES_TD) as Intervalle[],
       necessiteCle: true,
       limiteParAppel: 5000,
+      fenetreHistorique: true,
     };
   }
 
@@ -79,6 +80,13 @@ export class FournisseurTwelveData implements FournisseurDonneesMarche {
     url.searchParams.set('interval', INTERVALLES_TD[demande.intervalle]);
     url.searchParams.set('outputsize', String(Math.min(demande.limite, 5000)));
     url.searchParams.set('timezone', 'UTC');
+    // `end_date` est inclusive chez Twelve Data : on recule d'une seconde pour
+    // que « strictement antérieur » le soit vraiment. Sans ça, chaque tranche
+    // d'un import redemanderait la dernière bougie de la précédente, et la
+    // boucle qui détecte l'absence de progrès s'arrêterait un cran trop tôt.
+    if (demande.avant !== undefined) {
+      url.searchParams.set('end_date', horodatageTD(demande.avant - 1));
+    }
     url.searchParams.set('format', 'JSON');
     url.searchParams.set('apikey', contexte.cle);
 
@@ -130,6 +138,12 @@ export class FournisseurTwelveData implements FournisseurDonneesMarche {
       };
     }
   }
+}
+
+/** Format attendu par `end_date` : « AAAA-MM-JJ hh:mm:ss », en UTC puisque
+ *  `timezone=UTC` accompagne toujours la requête. */
+function horodatageTD(secondes: number): string {
+  return new Date(secondes * 1000).toISOString().slice(0, 19).replace('T', ' ');
 }
 
 function normaliser(valeur: ValeurTD): Chandelier | null {

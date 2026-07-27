@@ -106,12 +106,17 @@ export async function basculerFournisseur(
 
   const implementation = adaptateur(code);
   if (actif && implementation?.capacites().necessiteCle) {
+    // Une clé posée dans l'environnement suffit à faire tourner le
+    // fournisseur, donc elle doit suffire à l'activer. `lireCleTolerante`
+    // consulte la base quand elle est accessible, l'environnement toujours.
     const cle = await lireCleTolerante(clientAdminOptionnel(), profilId, code);
     if (!cle) {
       const variables = variablesReconnuesFournisseur(code);
       return {
         ok: false,
-        message: `Ce fournisseur exige une clé API : enregistrez-la, ou posez ${variables[0] ?? 'la variable correspondante'} dans l’environnement du serveur.`,
+        message:
+          'Ce fournisseur exige une clé API : enregistre-la d’abord' +
+          (variables.length > 0 ? `, ou pose ${variables[0]} chez l’hébergeur.` : '.'),
       };
     }
   }
@@ -200,22 +205,39 @@ export async function testerFournisseur(code: string): Promise<ResultatFournisse
   }
 
   const client = clientAdminOptionnel();
-  // Le repli sur l'environnement ne dépend pas du client à privilèges : une clé
-  // posée dans les variables de l'hébergeur doit être trouvée même quand
-  // SUPABASE_SERVICE_ROLE_KEY manque.
-  const cle = implementation.capacites().necessiteCle
+  // Sans client à privilèges on ne peut pas lire la base, mais l'environnement
+  // reste lisible : l'ignorer ferait dire « aucune clé » à un serveur qui en
+  // détient une, et c'est le message qui envoie chercher au mauvais endroit.
+  const necessiteCle = implementation.capacites().necessiteCle;
+  const cle = necessiteCle
     ? ((await lireCleTolerante(client, profilId, code)) ?? undefined)
     : undefined;
 
-  if (implementation.capacites().necessiteCle && !cle) {
+  // Un appel sortant sans clé ne peut que rater : autant nommer tout de suite
+  // les endroits regardés plutôt que de dépenser une requête pour l'apprendre.
+  if (necessiteCle && !cle) {
     const variables = variablesReconnuesFournisseur(code);
-    return {
-      ok: false,
-      message:
-        'Aucune clé trouvée — ni enregistrée dans l’application, ni dans l’environnement du serveur' +
-        (variables.length > 0 ? ` (${variables.join(' ou ')}).` : '.') +
-        ' Si vous venez de l’ajouter chez l’hébergeur, vérifiez qu’elle couvre bien l’environnement « Production » et redéployez : les variables ne sont lues qu’au démarrage.',
-    };
+    const message =
+      'Aucune clé trouvée pour ce fournisseur, ni enregistrée dans l’application' +
+      (variables.length > 0
+        ? `, ni dans les variables d’environnement du serveur (${variables.join(' ou ')}). ` +
+          'Une variable ajoutée chez l’hébergeur n’atteint pas un déploiement déjà en ligne : il faut redéployer, et vérifier qu’elle couvre bien l’environnement testé.'
+        : '.');
+
+    if (client) {
+      await client
+        .from('fournisseurs_donnees')
+        .update({
+          dernier_statut: 'ERREUR',
+          derniere_erreur: message,
+          derniere_verification_le: new Date().toISOString(),
+        })
+        .eq('profil_id', profilId)
+        .eq('code', code);
+    }
+
+    revalidatePath('/reglages/fournisseurs');
+    return { ok: false, message };
   }
 
   const controleur = new AbortController();

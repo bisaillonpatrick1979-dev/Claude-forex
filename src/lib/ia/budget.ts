@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { debutJourneeIso, FUSEAU_DEFAUT, libelleFuseau } from '@/lib/temps/journee';
 import type { Database } from '@/types/base-de-donnees';
 
 type Client = SupabaseClient<Database>;
@@ -12,9 +13,11 @@ type Client = SupabaseClient<Database>;
  * pour dépasser le plafond, et un cycle qui l'atteint s'arrête net plutôt que
  * de finir « à peu près ».
  *
- * La journée est celle de l'UTC. Une journée locale exigerait de stocker le
- * fuseau de l'utilisateur ; tant que ce n'est pas fait, on le dit dans l'UI
- * plutôt que de deviner.
+ * La journée est celle du fuseau du profil, pas celle de l'UTC. Le détail
+ * compte : depuis l'Alberta, une journée UTC se réarme à 18 h locales, en
+ * pleine séance de New York. Le plafond aurait doublé les jours où la firme
+ * travaille le soir, et se serait coupé en deux les autres — sans que rien ne
+ * l'explique à l'écran.
  */
 
 export interface EtatBudget {
@@ -23,22 +26,28 @@ export interface EtatBudget {
   readonly restantUsd: number;
   readonly depasse: boolean;
   readonly debutJournee: string;
-}
-
-export function debutJourneeUtc(maintenant: Date = new Date()): string {
-  const jour = new Date(
-    Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth(), maintenant.getUTCDate()),
-  );
-  return jour.toISOString();
+  readonly fuseau: string;
+  /** Fuseau et décalage en clair, à afficher à côté du compteur. */
+  readonly libelleFuseau: string;
 }
 
 export async function etatBudget(client: Client, profilId: string): Promise<EtatBudget> {
-  const debut = debutJourneeUtc();
+  // Le fuseau doit être lu avant de pouvoir borner la journée : les deux
+  // requêtes ne peuvent donc pas partir ensemble.
+  const { data: profil } = await client
+    .from('profils')
+    .select('plafond_cout_quotidien_usd, fuseau_horaire')
+    .eq('id', profilId)
+    .maybeSingle();
 
-  const [{ data: profil }, { data: appels }] = await Promise.all([
-    client.from('profils').select('plafond_cout_quotidien_usd').eq('id', profilId).maybeSingle(),
-    client.from('appels_llm').select('cout_usd').eq('profil_id', profilId).gte('cree_le', debut),
-  ]);
+  const fuseau = profil?.fuseau_horaire ?? FUSEAU_DEFAUT;
+  const debut = debutJourneeIso(fuseau);
+
+  const { data: appels } = await client
+    .from('appels_llm')
+    .select('cout_usd')
+    .eq('profil_id', profilId)
+    .gte('cree_le', debut);
 
   const plafondUsd = Number(profil?.plafond_cout_quotidien_usd ?? 0);
   const depenseUsd = (appels ?? []).reduce((total, ligne) => total + Number(ligne.cout_usd), 0);
@@ -49,6 +58,8 @@ export async function etatBudget(client: Client, profilId: string): Promise<Etat
     restantUsd: Math.max(0, plafondUsd - depenseUsd),
     depasse: depenseUsd >= plafondUsd,
     debutJournee: debut,
+    fuseau,
+    libelleFuseau: libelleFuseau(fuseau),
   };
 }
 

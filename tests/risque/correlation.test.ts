@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compterCorrelees, correlationEstimee, type ExpositionPosition } from '@/lib/risque/correlation';
+import { correlationEstimee, type ExpositionPosition } from '@/lib/risque/correlation';
 
 function fx(instrument: string, base: string, cotation: string, sens: 'ACHAT' | 'VENTE'): ExpositionPosition {
   return { instrument, classeActif: 'FOREX', deviseBase: base, deviseCotation: cotation, sens };
@@ -8,8 +8,9 @@ function fx(instrument: string, base: string, cotation: string, sens: 'ACHAT' | 
 
 /**
  * L'estimation par exposition aux devises doit reproduire les intuitions de
- * base du Forex, sinon le plafond de positions corrélées ne protège de rien :
- * on se retrouverait avec cinq fois le même pari sous cinq noms différents.
+ * base du Forex : c'est elle qui alimente la matrice de corrélation du risque
+ * agrégé, et une estimation fausse laisserait passer cinq fois le même pari
+ * sous cinq noms différents.
  */
 describe('corrélation par exposition aux devises', () => {
   const eurusdLong = fx('EURUSD', 'EUR', 'USD', 'ACHAT');
@@ -62,19 +63,5 @@ describe('corrélation par classe d’actifs', () => {
 
   it('ne relie pas des classes différentes', () => {
     expect(correlationEstimee(nasdaq, fx('EURUSD', 'EUR', 'USD', 'ACHAT'))).toBe(0);
-  });
-});
-
-describe('comptage des positions corrélées', () => {
-  it('ne compte que celles au-dessus du seuil', () => {
-    const proposee = fx('EURUSD', 'EUR', 'USD', 'ACHAT');
-    const ouvertes = [
-      fx('EURUSD', 'EUR', 'USD', 'ACHAT'), // 1
-      fx('GBPUSD', 'GBP', 'USD', 'ACHAT'), // 0,5
-      fx('USDCHF', 'USD', 'CHF', 'ACHAT'), // négatif
-    ];
-
-    expect(compterCorrelees(proposee, ouvertes, 0.7)).toBe(1);
-    expect(compterCorrelees(proposee, ouvertes, 0.4)).toBe(2);
   });
 });

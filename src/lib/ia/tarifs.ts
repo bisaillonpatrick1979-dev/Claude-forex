@@ -81,3 +81,25 @@ export function accepteTemperature(fournisseur: FournisseurLLM, modele: string):
   if (fournisseur === 'anthropic') return ANTHROPIC_ACCEPTE_TEMPERATURE.includes(modele);
   return true;
 }
+
+/**
+ * Miroir exact de la température, constaté en production : Haiku 4.5 refuse
+ * `output_config.effort` par un 400 « This model does not support the effort
+ * parameter », là où Opus 5 et Sonnet 5 l'acceptent.
+ *
+ * Les deux réglages sont donc **disjoints** sur Anthropic — aucun modèle
+ * n'accepte les deux, chacun en accepte exactement un. Envoyer l'effort à tout
+ * le monde a cassé trois agents sur douze pendant que les neuf autres
+ * fonctionnaient : un échec silencieux à la lecture du tableau de bord, parce
+ * qu'un cycle qui perd trois analystes rend quand même une décision.
+ *
+ * Liste blanche, comme pour la température : un modèle inconnu ne reçoit pas
+ * d'effort. Perdre un levier de coût dégrade ; envoyer un paramètre refusé
+ * annule l'appel.
+ */
+const ANTHROPIC_ACCEPTE_EFFORT: readonly string[] = ['claude-opus-5', 'claude-sonnet-5'];
+
+export function accepteEffort(fournisseur: FournisseurLLM, modele: string): boolean {
+  if (fournisseur === 'anthropic') return ANTHROPIC_ACCEPTE_EFFORT.includes(modele);
+  return true;
+}

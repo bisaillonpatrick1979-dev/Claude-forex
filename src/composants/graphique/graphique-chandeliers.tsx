@@ -24,8 +24,10 @@ import {
   rsi,
   type Serie,
 } from '@/lib/marche/indicateurs';
+import { POINTS_REQUIS, type Annotation, type Outil, type PointGraphique } from '@/lib/graphique/annotations';
 import type { Chandelier } from '@/lib/marche/types';
 
+import { PrimitiveAnnotations } from './primitive-annotations';
 import type { IndicateursActifs, MarqueurDecision } from './types-graphique';
 
 /**
@@ -61,6 +63,12 @@ interface Proprietes {
   readonly indicateurs: IndicateursActifs;
   readonly marqueurs?: readonly MarqueurDecision[];
   readonly cleInstrument: string;
+  readonly annotations?: readonly Annotation[];
+  /** Outil armé. `null` = le graphique se manipule normalement. */
+  readonly outil?: Outil | null;
+  readonly couleurOutil?: string;
+  /** Appelé quand tous les points requis par l'outil ont été posés. */
+  readonly surTracer?: (points: readonly PointGraphique[]) => void;
 }
 
 interface InfoSurvol {
@@ -74,6 +82,10 @@ export function GraphiqueChandeliers({
   indicateurs,
   marqueurs = [],
   cleInstrument,
+  annotations = [],
+  outil = null,
+  couleurOutil = '#4c9aff',
+  surTracer,
 }: Proprietes) {
   const conteneurRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -82,6 +94,18 @@ export function GraphiqueChandeliers({
   const overlaysRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
   const rsiRef = useRef<ISeriesApi<'Line'> | null>(null);
   const marqueursRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const primitiveRef = useRef<PrimitiveAnnotations | null>(null);
+
+  // Points déjà posés pour le tracé en cours. En `ref` et non en état : le
+  // gestionnaire de clic est enregistré une seule fois auprès du graphique, et
+  // une valeur d'état y serait figée à celle du premier rendu.
+  const enCoursRef = useRef<PointGraphique[]>([]);
+  const outilRef = useRef<Outil | null>(outil);
+  outilRef.current = outil;
+  const surTracerRef = useRef(surTracer);
+  surTracerRef.current = surTracer;
+
+  const [pointsPoses, setPointsPoses] = useState(0);
 
   const dernierAppliqueRef = useRef<{ cle: string; horodatage: number } | null>(null);
   const donneesRef = useRef<readonly Chandelier[]>([]);
@@ -142,6 +166,10 @@ export function GraphiqueChandeliers({
 
     marqueursRef.current = createSeriesMarkers(bougiesRef.current, []);
 
+    const primitive = new PrimitiveAnnotations();
+    bougiesRef.current.attachPrimitive(primitive);
+    primitiveRef.current = primitive;
+
     // Légende OHLC suivant le curseur : indispensable pour lire des valeurs
     // exactes plutôt que de les estimer à l'œil.
     chart.subscribeCrosshairMove((parametres) => {
@@ -158,6 +186,35 @@ export function GraphiqueChandeliers({
       const marqueur =
         marqueursDonneesRef.current.find((m) => m.horodatage === horodatage) ?? null;
       setSurvol({ chandelier, marqueur });
+    });
+
+    // Pose des points d'un tracé. L'ancrage se fait en prix et en temps, pas en
+    // pixels : c'est ce qui fait qu'un trait reste sur son niveau quand on zoome.
+    chart.subscribeClick((parametres) => {
+      const arme = outilRef.current;
+      if (!arme || !parametres.point) return;
+
+      const serie = bougiesRef.current;
+      if (!serie) return;
+
+      const prix = serie.coordinateToPrice(parametres.point.y);
+      // Un clic dans la marge droite n'a pas de bougie sous le curseur :
+      // `param.time` est alors absent, et c'est l'échelle qui donne l'instant.
+      const instant =
+        (parametres.time as UTCTimestamp | undefined) ??
+        (chart.timeScale().coordinateToTime(parametres.point.x) as UTCTimestamp | null);
+
+      if (prix === null || instant === null || instant === undefined) return;
+
+      enCoursRef.current = [...enCoursRef.current, { horodatage: instant, prix }];
+      setPointsPoses(enCoursRef.current.length);
+
+      if (enCoursRef.current.length >= POINTS_REQUIS[arme]) {
+        const points = enCoursRef.current;
+        enCoursRef.current = [];
+        setPointsPoses(0);
+        surTracerRef.current?.(points);
+      }
     });
 
     const redimensionner = () => {
@@ -182,6 +239,7 @@ export function GraphiqueChandeliers({
       volumeRef.current = null;
       rsiRef.current = null;
       marqueursRef.current = null;
+      primitiveRef.current = null;
       overlays.clear();
       dernierAppliqueRef.current = null;
     };
@@ -194,7 +252,28 @@ export function GraphiqueChandeliers({
     bougiesRef.current?.applyOptions({
       priceFormat: { type: 'price', precision: decimales, minMove: 10 ** -decimales },
     });
+    primitiveRef.current?.definirDecimales(decimales);
   }, [decimales]);
+
+  useEffect(() => {
+    primitiveRef.current?.definirAnnotations(annotations);
+  }, [annotations]);
+
+  // Changer d'outil ou l'abandonner annule le tracé en cours : laisser un point
+  // orphelin ferait apparaître un trait à moitié posé au clic suivant.
+  useEffect(() => {
+    enCoursRef.current = [];
+    setPointsPoses(0);
+  }, [outil, cleInstrument]);
+
+  // Le graphique ne se déplace plus tant qu'un outil est armé : sinon le
+  // premier clic pose un point et le glissement qui suit fait défiler l'écran.
+  useEffect(() => {
+    chartRef.current?.applyOptions({
+      handleScroll: outil === null,
+      handleScale: outil === null,
+    });
+  }, [outil]);
 
   // --- Application des données --------------------------------------------
   useEffect(() => {
@@ -340,9 +419,26 @@ export function GraphiqueChandeliers({
     );
   }, [marqueurs]);
 
+  const restants = outil ? POINTS_REQUIS[outil] - pointsPoses : 0;
+
   return (
     <div className="relative h-full w-full">
-      <div ref={conteneurRef} className="h-full w-full" />
+      <div
+        ref={conteneurRef}
+        className={`h-full w-full ${outil ? 'cursor-crosshair' : ''}`}
+        style={outil ? { boxShadow: `inset 0 0 0 1px ${couleurOutil}66` } : undefined}
+      />
+
+      {outil ? (
+        <div
+          className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded border px-2 py-1 text-xs backdrop-blur-sm"
+          style={{ borderColor: couleurOutil, color: couleurOutil, background: 'rgba(10,13,18,0.85)' }}
+        >
+          {restants > 0
+            ? `Cliquer ${restants === 1 ? 'un point' : `${restants} points`} sur le graphique`
+            : 'Tracé enregistré'}
+        </div>
+      ) : null}
 
       {survol ? (
         <div className="pointer-events-none absolute left-2 top-2 rounded border border-bordure bg-panneau/90 px-2 py-1.5 backdrop-blur-sm">

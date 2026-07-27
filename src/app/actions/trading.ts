@@ -15,6 +15,7 @@ import { estIntervalle } from '@/lib/marche/intervalles';
 import type { Intervalle } from '@/lib/marche/types';
 import { evaluerGardeFous } from '@/lib/risque/garde-fous';
 import { limiterDebit } from '@/lib/securite/limitation-debit';
+import { equiteOuvertureJournee, lireFuseauProfil } from '@/lib/temps/journee-serveur';
 import { clientAdminOptionnel } from '@/lib/supabase/admin';
 import { profilAuthentifie } from '@/lib/supabase/session';
 
@@ -81,6 +82,16 @@ export async function passerOrdreManuel(saisie: SaisieOrdre): Promise<ResultatTr
 
   const prixReference = donnees.prixDemande ?? marche.contexte.bougie.cloture;
 
+  // Repère d'ouverture de la journée locale : sans lui, `equiteDebutJournee`
+  // recevait l'équité courante et la perte du jour valait toujours zéro.
+  const equiteOuverture = await equiteOuvertureJournee(client, {
+    profilId,
+    portefeuilleId: persiste.portefeuilleId,
+    equiteActuelle: persiste.etat.portefeuille.equite,
+    soldeActuel: persiste.etat.portefeuille.solde,
+    fuseau: await lireFuseauProfil(client, profilId),
+  });
+
   // ═══ Point de passage obligatoire ═══
   const decision = evaluerGardeFous(
     {
@@ -99,7 +110,7 @@ export async function passerOrdreManuel(saisie: SaisieOrdre): Promise<ResultatTr
         tauxCotationVersCompte: marche.contexte.tauxCotationVersCompte ?? 1,
         prixCourant: marche.contexte.bougie.cloture,
       })),
-      equiteDebutJournee: persiste.etat.portefeuille.equite,
+      equiteDebutJournee: equiteOuverture,
       evenementsMacro: [],
       maintenant: marche.contexte.bougie.horodatage,
     },

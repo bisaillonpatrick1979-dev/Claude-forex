@@ -12,6 +12,7 @@ import {
   type FournisseurLLM,
   type MessageLLM,
   type ReponseLLM,
+  type NiveauEffort,
 } from './types';
 
 type Client = SupabaseClient<Database>;
@@ -31,6 +32,7 @@ export interface ConfigurationAgent {
   readonly modele: string;
   readonly temperature: number;
   readonly tokensMax: number;
+  readonly effort?: NiveauEffort | null;
 }
 
 export interface ParametresAppel {
@@ -117,6 +119,7 @@ export async function appelerModele(parametres: ParametresAppel): Promise<Result
     // Le champ vaut `null` quand la température ne doit pas partir du tout ;
     // chaque adaptateur applique ensuite ses propres contraintes de modèle.
     temperature: Number.isFinite(agent.temperature) ? agent.temperature : null,
+    effort: agent.effort ?? null,
     formatJson: parametres.formatJson ?? null,
     contexteDeterministe: parametres.contexteDeterministe ?? null,
     rechercheWeb: parametres.rechercheWeb ?? false,
