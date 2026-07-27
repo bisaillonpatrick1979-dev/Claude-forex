@@ -195,13 +195,13 @@ describe('tarifs et contraintes de modèle', () => {
 
 describe('sources de recherche', () => {
   it('n’ouvre le web qu’aux rôles dont la matière est hors du graphique', () => {
-    expect(rechercheAutorisee('ANALYSTE_MACRO')).toBe(true);
-    expect(rechercheAutorisee('ANALYSTE_SENTIMENT')).toBe(true);
-    expect(rechercheAutorisee('ANALYSTE_FONDAMENTAL')).toBe(true);
+    expect(rechercheAutorisee('ANALYSTE_MACRO', 'TEMPS_REEL')).toBe(true);
+    expect(rechercheAutorisee('ANALYSTE_SENTIMENT', 'TEMPS_REEL')).toBe(true);
+    expect(rechercheAutorisee('ANALYSTE_FONDAMENTAL', 'TEMPS_REEL')).toBe(true);
     // L'analyste technique a déjà tout dans l'instantané : chaque requête
     // coûterait des tokens sans rien apporter.
-    expect(rechercheAutorisee('ANALYSTE_TECHNIQUE')).toBe(false);
-    expect(rechercheAutorisee('TRADER')).toBe(false);
+    expect(rechercheAutorisee('ANALYSTE_TECHNIQUE', 'TEMPS_REEL')).toBe(false);
+    expect(rechercheAutorisee('TRADER', 'TEMPS_REEL')).toBe(false);
   });
 
   it('restreint la recherche à des domaines nommés', () => {

@@ -34,7 +34,14 @@ import {
   resumerPourSuite,
 } from './invites';
 import { reflechirSurPositionsFermees } from './reflexion';
-import { CONSIGNE_RECHERCHE, domainesPour, rechercheAutorisee } from './sources';
+import {
+  CONSIGNE_RECHERCHE,
+  domainesPour,
+  raisonRegimeHistorique,
+  rechercheAutorisee,
+  regimeCycle,
+  type ConditionsTemporelles,
+} from './sources';
 import {
   indexerStrategiesManquantes,
   recupererLecons,
@@ -181,10 +188,16 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
     );
   }
 
-  const [{ data: profil }, agents, parametres] = await Promise.all([
+  const [{ data: profil }, agents, parametres, { data: etatRejeu }] = await Promise.all([
     client.from('profils').select('mode_operation').eq('id', profilId).maybeSingle(),
     chargerAgents(client, profilId),
     lireParametresRisque(client, profilId),
+    client
+      .from('portefeuilles')
+      .select('rejeu_actif')
+      .eq('profil_id', profilId)
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (!profil) return echec('Profil introuvable.');
@@ -244,6 +257,19 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
 
   if (!cycle) return echec('Impossible d’ouvrir le cycle.');
 
+  // ═══ Régime temporel : décide si les agents ont le droit de consulter le web
+  //     Un cycle qui travaille sur des bougies passées ne doit pas pouvoir lire
+  //     les nouvelles d'aujourd'hui — il connaîtrait la suite. ═══
+  const conditions: ConditionsTemporelles = {
+    rejeuActif: etatRejeu?.rejeu_actif ?? false,
+    instantanePerime: instantane.perime,
+    horodatageDerniereBougie:
+      instantane.chandeliers[instantane.chandeliers.length - 1]?.horodatage ?? 0,
+    intervalle,
+    maintenant: Math.floor(Date.now() / 1000),
+  };
+  const regime = regimeCycle(conditions);
+
   const compteur = new Compteur(cycle.budget_appels_llm, cycle.budget_secondes, budget);
   const sequence: Sequence = { valeur: 0 };
   const rendu = rendreInstantane(instantane);
@@ -274,6 +300,22 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
       .join(' '),
     { origine: instantane.origine, fournisseur: instantane.fournisseur },
   );
+
+  const explicationRegime = raisonRegimeHistorique(conditions);
+  if (explicationRegime) {
+    await messageSysteme(
+      {
+        client,
+        profilId,
+        cycleId: cycle.id,
+        etat: 'COLLECTE_DONNEES',
+        sequence: (sequence.valeur += 1),
+        tour: 0,
+      },
+      explicationRegime,
+      { regime },
+    );
+  }
 
   // Mémoire : une seule requête sert tout le cycle. Les embeddings sont
   // facturés, en refaire un par agent serait du gaspillage pur.
@@ -307,7 +349,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
     formatJson: string | null,
     strategies: readonly string[] = strategiesGenerales.map((extrait) => extrait.rendu),
   ): Promise<{ contenu: string; appel: ResultatAppel } | { erreur: string }> => {
-    const chercheSurLeWeb = rechercheAutorisee(agent.role);
+    const chercheSurLeWeb = rechercheAutorisee(agent.role, regime);
     const blocage = compteur.obstacle();
     if (blocage) return { erreur: blocage };
 
