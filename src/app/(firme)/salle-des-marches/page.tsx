@@ -9,6 +9,7 @@ import { listerSymboles } from '@/lib/marche/symboles';
 import { raisonIndisponibilite } from '@/lib/agents/enveloppe';
 import { chargerEnveloppe } from '@/lib/agents/enveloppe-serveur';
 import { clientAdminOptionnel } from '@/lib/supabase/admin';
+import { chargerSourcesMarqueurs } from '@/lib/orchestration/marqueurs-serveur';
 import { clientServeur } from '@/lib/supabase/serveur';
 
 export const metadata = { title: 'Salle des marchés — Trading Floor IA' };
@@ -63,6 +64,8 @@ export default async function PageSalleDesMarches() {
         .eq('profil_id', profilId)
         .eq('niveau', 'AUTONOME'),
     ]);
+
+  const sourcesMarqueurs = await chargerSourcesMarqueurs(supabase, profilId);
 
   // L'enveloppe passe par le client à privilèges : elle agrège des positions
   // fermées que RLS laisse lire, mais le calcul doit rester identique à celui
@@ -167,6 +170,7 @@ export default async function PageSalleDesMarches() {
       symboles={symboles}
       positions={positionsAffichees}
       ordres={ordresAffiches}
+      sourcesMarqueurs={sourcesMarqueurs}
       panneauFirme={panneauFirme}
       panneauAgents={panneauAgents}
       profilId={profilId}

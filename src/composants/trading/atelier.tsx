@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { FilSpecialistes, type AgentAffiche } from '@/composants/agents/fil-specialistes';
 import { ZoneGraphique, type SymboleOption } from '@/composants/graphique/zone-graphique';
-import type { MarqueurDecision } from '@/composants/graphique/types-graphique';
+import { construireMarqueurs, type SourcesMarqueurs } from '@/lib/orchestration/marqueurs';
 import { Panneau } from '@/composants/ui/panneau';
 import type { Intervalle } from '@/lib/marche/types';
 
@@ -28,7 +28,7 @@ export function Atelier({
   symboles,
   positions,
   ordres,
-  marqueurs = [],
+  sourcesMarqueurs,
   panneauFirme,
   panneauAgents,
   profilId,
@@ -39,7 +39,7 @@ export function Atelier({
   symboles: readonly SymboleOption[];
   positions: readonly PositionAffichee[];
   ordres: readonly OrdreAffiche[];
-  marqueurs?: readonly MarqueurDecision[];
+  sourcesMarqueurs: SourcesMarqueurs;
   panneauFirme: React.ReactNode;
   panneauAgents: React.ReactNode;
   profilId: string;
@@ -52,6 +52,14 @@ export function Atelier({
   const [dernierPrix, setDernierPrix] = useState<number | null>(null);
 
   const surDernierPrix = useCallback((prix: number | null) => setDernierPrix(prix), []);
+
+  // Les marqueurs sont recalculés à chaque changement d'instrument ou
+  // d'intervalle : l'alignement sur l'ouverture de bougie dépend des deux, et
+  // un marqueur mal aligné n'est pas affiché du tout par lightweight-charts.
+  const marqueurs = useMemo(
+    () => construireMarqueurs(sourcesMarqueurs, symbole, intervalle),
+    [sourcesMarqueurs, symbole, intervalle],
+  );
   const decimales = symboles.find((option) => option.code === symbole)?.decimales ?? 5;
 
   return (

@@ -8,6 +8,7 @@ import { chargerEnveloppe } from '@/lib/agents/enveloppe-serveur';
 import { estIntervalle } from '@/lib/marche/intervalles';
 import type { Intervalle } from '@/lib/marche/types';
 import { lancerCycle } from '@/lib/orchestration/cycle';
+import { reflechirSurPositionsFermees } from '@/lib/orchestration/reflexion';
 import { limiterDebit } from '@/lib/securite/limitation-debit';
 import { clientAdminOptionnel } from '@/lib/supabase/admin';
 import { profilAuthentifie } from '@/lib/supabase/session';
@@ -88,6 +89,45 @@ export async function lancerCycleAgents(
     cycleId: resultat.cycleId,
     coutUsd: resultat.coutUsd,
   };
+}
+
+export interface ResultatDebrief {
+  readonly ok: boolean;
+  readonly message: string;
+  readonly leconsEcrites: number;
+}
+
+/**
+ * Débrief manuel des positions fermées.
+ *
+ * Le cycle en déclenche déjà un à chaque passage ; ce bouton sert à rattraper
+ * l'arriéré sans lancer une délibération complète — typiquement après un rejeu
+ * qui a fermé trente positions d'un coup.
+ */
+export async function debrieferPositions(): Promise<ResultatDebrief> {
+  const profilId = await profilAuthentifie();
+  if (!profilId) return { ok: false, message: 'Session expirée.', leconsEcrites: 0 };
+
+  if (!limiterDebit(`debrief:${profilId}`, 10, 60_000).autorise) {
+    return {
+      ok: false,
+      message: 'Trop de débriefs coup sur coup. Réessaie dans une minute.',
+      leconsEcrites: 0,
+    };
+  }
+
+  const client = clientAdminOptionnel();
+  if (!client) {
+    return {
+      ok: false,
+      message: 'SUPABASE_SERVICE_ROLE_KEY absente côté serveur.',
+      leconsEcrites: 0,
+    };
+  }
+
+  const resultat = await reflechirSurPositionsFermees(client, profilId, 5);
+  revalidatePath('/salle-des-marches');
+  return resultat;
 }
 
 export interface ResultatEnveloppe {
