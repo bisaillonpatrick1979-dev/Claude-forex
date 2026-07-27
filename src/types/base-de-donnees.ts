@@ -1105,6 +1105,13 @@ export type Database = {
           nom: string
           profil_id: string
           raison_gel: string | null
+          rejeu_actif: boolean
+          rejeu_curseur: number | null
+          rejeu_debut: number | null
+          rejeu_fin: number | null
+          rejeu_intervalle: Database["public"]["Enums"]["intervalle"] | null
+          rejeu_source: string | null
+          rejeu_symbole: string | null
           solde: number
           sommet_equite: number
         }
@@ -1124,6 +1131,13 @@ export type Database = {
           nom?: string
           profil_id: string
           raison_gel?: string | null
+          rejeu_actif?: boolean
+          rejeu_curseur?: number | null
+          rejeu_debut?: number | null
+          rejeu_fin?: number | null
+          rejeu_intervalle?: Database["public"]["Enums"]["intervalle"] | null
+          rejeu_source?: string | null
+          rejeu_symbole?: string | null
           solde?: number
           sommet_equite?: number
         }
@@ -1143,6 +1157,13 @@ export type Database = {
           nom?: string
           profil_id?: string
           raison_gel?: string | null
+          rejeu_actif?: boolean
+          rejeu_curseur?: number | null
+          rejeu_debut?: number | null
+          rejeu_fin?: number | null
+          rejeu_intervalle?: Database["public"]["Enums"]["intervalle"] | null
+          rejeu_source?: string | null
+          rejeu_symbole?: string | null
           solde?: number
           sommet_equite?: number
         }

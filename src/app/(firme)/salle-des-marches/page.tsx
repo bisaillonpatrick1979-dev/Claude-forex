@@ -34,7 +34,7 @@ export default async function PageSalleDesMarches() {
   ] = await Promise.all([
       supabase
         .from('portefeuilles')
-        .select('nom, devise, capital_initial, solde, equite, marge_utilisee, sommet_equite, gele, raison_gel, capital_alloue_agents')
+        .select('nom, devise, capital_initial, solde, equite, marge_utilisee, sommet_equite, gele, raison_gel, capital_alloue_agents, rejeu_actif, rejeu_symbole, rejeu_intervalle, rejeu_debut, rejeu_curseur, rejeu_fin, rejeu_source')
         .eq('profil_id', profilId)
         .limit(1)
         .maybeSingle(),
@@ -176,6 +176,15 @@ export default async function PageSalleDesMarches() {
         couleur: agent.couleur,
       }))}
       blocageAgents={enveloppe ? raisonIndisponibilite(enveloppe) : null}
+      rejeu={{
+        actif: portefeuille?.rejeu_actif ?? false,
+        symbole: portefeuille?.rejeu_symbole ?? null,
+        intervalle: portefeuille?.rejeu_intervalle ?? null,
+        curseur: portefeuille?.rejeu_curseur ?? null,
+        debut: portefeuille?.rejeu_debut ?? null,
+        fin: portefeuille?.rejeu_fin ?? null,
+        source: portefeuille?.rejeu_source ?? null,
+      }}
     />
   );
 }
