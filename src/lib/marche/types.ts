@@ -61,6 +61,17 @@ export interface DemandeChandeliers {
   readonly classeActif: ClasseActif;
   readonly intervalle: Intervalle;
   readonly limite: number;
+  /**
+   * Ne rendre que des bougies strictement antérieures à cet instant (secondes
+   * UTC). C'est ce qui permet de remonter le temps par tranches : sans cela un
+   * fournisseur ne sait servir que sa fenêtre la plus récente, et quinze ans
+   * d'historique sont hors de portée quel que soit le nombre d'appels.
+   *
+   * Un adaptateur qui déclare `fenetreHistorique: false` l'ignore — d'où le
+   * drapeau, pour que l'importateur refuse d'entrer dans une boucle qui ne
+   * progresserait jamais.
+   */
+  readonly avant?: number;
 }
 
 /** Ce qu'un adaptateur sait faire. Le routeur s'en sert pour ne pas appeler
@@ -71,6 +82,8 @@ export interface Capacites {
   readonly necessiteCle: boolean;
   /** Nombre maximal de bougies rendues en un appel. */
   readonly limiteParAppel: number;
+  /** Vrai si l'adaptateur honore `avant` et sait donc remonter le temps. */
+  readonly fenetreHistorique: boolean;
 }
 
 export interface ContexteAppel {

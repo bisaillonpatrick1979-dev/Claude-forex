@@ -75,6 +75,8 @@ export class FournisseurFinnhub implements FournisseurDonneesMarche {
       intervalles: ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1'],
       necessiteCle: true,
       limiteParAppel: 500,
+      // Le palier gratuit de Finnhub a retiré l'accès aux bougies datées.
+      fenetreHistorique: false,
     };
   }
 
