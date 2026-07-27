@@ -2,7 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { Database } from '@/types/base-de-donnees';
 
+import { pnlLatent } from './moteur';
 import type {
+  ContexteBougie,
   Ecriture,
   EtatMoteur,
   Evenement,
@@ -11,6 +13,8 @@ import type {
   PositionOuverte,
   ResultatBougie,
 } from './types';
+
+type OriginePosition = Database['public']['Enums']['origine_position'];
 
 type Client = SupabaseClient<Database>;
 
@@ -174,6 +178,13 @@ interface ContextePersistance {
   readonly portefeuilleId: string;
   readonly symboleId: string;
   readonly cycleId?: string | null;
+  /** Renseigné quand l'ordre vient d'un agent : c'est ce qui permet d'isoler
+   *  ensuite le résultat des agents de celui des ordres passés à la main. */
+  readonly origine?: OriginePosition;
+  /** Fourni par les appelants qui disposent du contexte de bougie ; sert à
+   *  écrire le latent de chaque position ouverte. Sans lui, le latent reste à
+   *  sa valeur précédente plutôt que d'être remis à zéro à tort. */
+  readonly reevaluation?: { readonly contexte: ContexteBougie; readonly taux: number | null };
 }
 
 /**
@@ -196,6 +207,7 @@ export async function appliquerResultat(
   await fermerPositions(client, evenements);
   await majOrdres(client, evenements, etat.ordres);
   await insererTransactions(client, contexte, ecritures);
+  await reevaluerPositions(client, contexte, etat.positions);
 
   await client
     .from('portefeuilles')
@@ -218,6 +230,19 @@ async function insererPositions(
   const ouvertures = evenements.filter((evenement) => evenement.type === 'POSITION_OUVERTE');
   if (ouvertures.length === 0) return;
 
+  // L'origine se lit sur l'ordre qui a ouvert la position, pas sur le lot
+  // traité : une même bougie peut remplir un ordre manuel et un ordre d'agent,
+  // et les attribuer en bloc fausserait le résultat affiché de l'enveloppe.
+  const idsOrdres = ouvertures
+    .map((evenement) => evenement.ordreId)
+    .filter((id): id is string => typeof id === 'string');
+
+  const origines = new Map<string, OriginePosition>();
+  if (idsOrdres.length > 0) {
+    const { data } = await client.from('ordres').select('id, origine').in('id', idsOrdres);
+    for (const ligne of data ?? []) origines.set(ligne.id, ligne.origine);
+  }
+
   const lignes = ouvertures.flatMap((evenement) => {
     const position = positions.find((candidate) => candidate.id === evenement.positionId);
     if (!position) return [];
@@ -238,12 +263,41 @@ async function insererPositions(
         commission_totale: position.commissionTotale,
         swap_total: position.swapTotal,
         statut: 'OUVERTE' as const,
+        origine:
+          (evenement.ordreId ? origines.get(evenement.ordreId) : undefined) ??
+          contexte.origine ??
+          'MANUEL',
         ouvert_le: new Date(position.ouvertLe * 1000).toISOString(),
       },
     ];
   });
 
   if (lignes.length > 0) await client.from('positions').insert(lignes);
+}
+
+/**
+ * Écrit le latent de chaque position encore ouverte.
+ *
+ * Le moteur le calcule déjà pour réévaluer l'équité ; on le persiste ici pour
+ * pouvoir répondre séparément à « combien les agents ont-ils gagné » et
+ * « combien ai-je gagné moi-même ». Sans taux de conversion connu on
+ * s'abstient : écrire 0 laisserait croire à une position à l'équilibre.
+ */
+async function reevaluerPositions(
+  client: Client,
+  contexte: ContextePersistance,
+  positions: readonly PositionOuverte[],
+): Promise<void> {
+  const reevaluation = contexte.reevaluation;
+  if (!reevaluation || reevaluation.taux === null || positions.length === 0) return;
+
+  const taux = reevaluation.taux;
+  for (const position of positions) {
+    await client
+      .from('positions')
+      .update({ pnl_latent: pnlLatent(position, reevaluation.contexte, taux) })
+      .eq('id', position.id);
+  }
 }
 
 async function fermerPositions(client: Client, evenements: readonly Evenement[]): Promise<void> {

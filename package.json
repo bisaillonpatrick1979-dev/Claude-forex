@@ -13,6 +13,7 @@
     "test:couverture": "vitest run --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
     "lightweight-charts": "^5.2.0",

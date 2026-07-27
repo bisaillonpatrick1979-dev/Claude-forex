@@ -15,6 +15,12 @@ export const NAVIGATION: readonly EntreeNavigation[] = [
     description: 'Graphique, fil des spécialistes et état de la firme.',
   },
   {
+    href: '/validation',
+    libelle: 'Validation',
+    abrege: 'Valid.',
+    description: 'Ordres proposés par les agents, en attente de votre décision.',
+  },
+  {
     href: '/historique',
     libelle: 'Historique des cycles',
     abrege: 'Cycles',

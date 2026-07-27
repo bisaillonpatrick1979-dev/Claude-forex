@@ -15,7 +15,11 @@ export type ModeOperation = Database['public']['Enums']['mode_operation'];
 const VERROU_PHASE_7 = true as const;
 
 /** Modes réellement sélectionnables aujourd'hui. */
-export const MODES_AUTORISES: readonly ModeOperation[] = ['PAPIER_AUTONOME', 'PAPIER_VALIDATION'];
+export const MODES_AUTORISES: readonly ModeOperation[] = [
+  'PAPIER_AUTONOME',
+  'PAPIER_VALIDATION',
+  'PAPIER_CONSEIL',
+];
 
 export function modeReelAutorise(): boolean {
   if (VERROU_PHASE_7) return false;

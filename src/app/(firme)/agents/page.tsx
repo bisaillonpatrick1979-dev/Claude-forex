@@ -1,85 +1,142 @@
+import { redirect } from 'next/navigation';
+
 import { EntetePage } from '@/composants/ui/entete-page';
 import { EtatVide, Panneau } from '@/composants/ui/panneau';
+import { roleHabiliteAExecuter } from '@/lib/agents/niveaux';
+import { DESCRIPTIONS_MODES } from '@/lib/config/modes';
 import { clientServeur } from '@/lib/supabase/serveur';
-import type { Database } from '@/types/base-de-donnees';
+
+import { BancEssai, type AgentOption } from './banc-essai';
+import { ConsoleAgents, type AgentAffiche } from './console-agents';
 
 export const metadata = { title: 'Agents — Trading Floor IA' };
 
-type RoleAgent = Database['public']['Enums']['role_agent'];
-
-/** Les trois étages de la firme, dans l'ordre où ils interviennent. */
-const ETAGES: readonly { titre: string; roles: readonly RoleAgent[] }[] = [
-  {
-    titre: 'Étage 1 — Équipe d’analyse',
-    roles: [
-      'ANALYSTE_TECHNIQUE',
-      'ANALYSTE_MACRO',
-      'ANALYSTE_FONDAMENTAL',
-      'ANALYSTE_SENTIMENT',
-      'ANALYSTE_VOLATILITE',
-    ],
-  },
-  {
-    titre: 'Étage 2 — Salle de recherche',
-    roles: ['CHERCHEUR_HAUSSIER', 'CHERCHEUR_BAISSIER', 'DIRECTEUR_RECHERCHE'],
-  },
-  {
-    titre: 'Étage 3 — Exécution et contrôle',
-    roles: ['TRADER', 'GESTIONNAIRE_RISQUE', 'GESTIONNAIRE_PORTEFEUILLE', 'AGENT_REFLEXION'],
-  },
-];
-
+/**
+ * Console de gouvernance de la firme.
+ *
+ * L'organigramme n'est plus une liste à regarder : c'est ici qu'on décide qui
+ * a le droit d'engager le portefeuille et qui doit demander la permission.
+ */
 export default async function PageAgents() {
   const supabase = await clientServeur();
-  const { data: agents } = await supabase
-    .from('agents')
-    .select('id, nom, role, couleur, fournisseur_llm, modele, temperature, actif')
-    .order('ordre_affichage');
+  const { data: jetons } = await supabase.auth.getClaims();
+  const profilId = jetons?.claims?.sub;
+  if (typeof profilId !== 'string') redirect('/connexion');
+
+  const [{ data: agents }, { data: profil }, { data: symboles }] = await Promise.all([
+    supabase
+      .from('agents')
+      .select(
+        `id, cle, nom, role, couleur, actif, fournisseur_llm, modele, ordre_affichage,
+         permissions_agents (niveau, peut_ouvrir, peut_fermer, peut_modifier_protections,
+           taille_max_lots, risque_max_par_trade_pct, trades_max_par_jour, seuil_validation_lots,
+           confiance_minimale, validite_validation_minutes, classes_autorisees, symboles_autorises,
+           suspendu_jusqu_a),
+         mandats_agents (version, contenu, actif)`,
+      )
+      .eq('profil_id', profilId)
+      .order('ordre_affichage'),
+    supabase.from('profils').select('mode_operation').eq('id', profilId).maybeSingle(),
+    supabase.from('symboles').select('code').eq('actif', true).order('code'),
+  ]);
+
+  const affiches: AgentAffiche[] = (agents ?? []).map((agent) => {
+    const brut = agent.permissions_agents as unknown;
+    const permission = (Array.isArray(brut) ? brut[0] : brut) as
+      | {
+          niveau: AgentAffiche['niveau'];
+          peut_ouvrir: boolean;
+          peut_fermer: boolean;
+          peut_modifier_protections: boolean;
+          taille_max_lots: number | null;
+          risque_max_par_trade_pct: number | null;
+          trades_max_par_jour: number | null;
+          seuil_validation_lots: number | null;
+          confiance_minimale: number | null;
+          validite_validation_minutes: number;
+          classes_autorisees: string[];
+          symboles_autorises: string[];
+          suspendu_jusqu_a: string | null;
+        }
+      | null
+      | undefined;
+
+    const mandat = (agent.mandats_agents ?? []).find((version) => version.actif);
+    const nombreOuNull = (valeur: number | null | undefined): number | null =>
+      valeur === null || valeur === undefined ? null : Number(valeur);
+
+    return {
+      id: agent.id,
+      cle: agent.cle,
+      nom: agent.nom,
+      role: agent.role,
+      couleur: agent.couleur,
+      actif: agent.actif,
+      fournisseur: agent.fournisseur_llm,
+      modele: agent.modele,
+      mandat: mandat?.contenu ?? '',
+      versionMandat: mandat?.version ?? null,
+      niveau: permission?.niveau ?? 'OBSERVATEUR',
+      peutOuvrir: permission?.peut_ouvrir ?? false,
+      peutFermer: permission?.peut_fermer ?? false,
+      peutModifierProtections: permission?.peut_modifier_protections ?? false,
+      tailleMaxLots: nombreOuNull(permission?.taille_max_lots),
+      risqueMaxParTradePct: nombreOuNull(permission?.risque_max_par_trade_pct),
+      tradesMaxParJour: permission?.trades_max_par_jour ?? null,
+      seuilValidationLots: nombreOuNull(permission?.seuil_validation_lots),
+      confianceMinimale: permission?.confiance_minimale ?? null,
+      validiteValidationMinutes: permission?.validite_validation_minutes ?? 30,
+      classesAutorisees: permission?.classes_autorisees ?? [],
+      symbolesAutorises: permission?.symboles_autorises ?? [],
+      suspenduJusquA: permission?.suspendu_jusqu_a ?? null,
+      peutEtreAutonome: roleHabiliteAExecuter(agent.role),
+    };
+  });
+
+  // Le banc d'essai ne propose que les agents qui pourraient réellement
+  // soumettre : faire « tester » un analyste ne dirait rien d'utile.
+  const optionsBanc: AgentOption[] = affiches
+    .filter((agent) => agent.peutOuvrir || agent.peutFermer)
+    .map((agent) => ({ cle: agent.cle, nom: agent.nom, niveau: agent.niveau }));
+
+  const mode = profil?.mode_operation ?? 'PAPIER_AUTONOME';
 
   return (
     <>
       <EntetePage
         titre="Agents"
-        description="Organigramme de la firme. L’édition des mandats et l’assignation des modèles arrivent en phase 4."
+        description="Organigramme de la firme, autorisations de trading et mandats."
       />
 
-      {!agents || agents.length === 0 ? (
+      <div className="mb-3">
+        <Panneau titre="Mode d’opération">
+          <p className="text-xs text-texte-attenue">
+            <span className="text-texte">{DESCRIPTIONS_MODES[mode].libelle}</span> —{' '}
+            {DESCRIPTIONS_MODES[mode].description}
+            {mode !== 'PAPIER_AUTONOME' ? (
+              <>
+                {' '}
+                Tant que ce mode est actif, il prime sur les niveaux ci-dessous :{' '}
+                {mode === 'PAPIER_CONSEIL'
+                  ? 'aucun agent ne peut soumettre d’ordre.'
+                  : 'aucun agent n’exécute sans votre validation.'}
+              </>
+            ) : null}
+          </p>
+        </Panneau>
+      </div>
+
+      {affiches.length === 0 ? (
         <Panneau>
           <EtatVide message="Aucun agent pour ce profil." />
         </Panneau>
       ) : (
         <div className="flex flex-col gap-3">
-          {ETAGES.map((etage) => (
-            <Panneau key={etage.titre} titre={etage.titre}>
-              <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {agents
-                  .filter((agent) => etage.roles.includes(agent.role))
-                  .map((agent) => (
-                    <li
-                      key={agent.id}
-                      className="rounded border border-bordure bg-panneau-clair px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          aria-hidden
-                          className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: agent.couleur }}
-                        />
-                        <span className="text-sm">{agent.nom}</span>
-                        {!agent.actif ? (
-                          <span className="chiffre ml-auto text-[10px] uppercase tracking-wider text-texte-attenue">
-                            inactif
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="chiffre mt-1 text-[11px] text-texte-attenue">
-                        {agent.fournisseur_llm} · {agent.modele} · t={agent.temperature}
-                      </p>
-                    </li>
-                  ))}
-              </ul>
-            </Panneau>
-          ))}
+          <ConsoleAgents agents={affiches} />
+          <BancEssai
+            agents={optionsBanc}
+            symboles={(symboles ?? []).map((symbole) => symbole.code)}
+          />
         </div>
       )}
     </>
