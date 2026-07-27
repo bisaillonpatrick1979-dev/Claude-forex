@@ -35,22 +35,31 @@ html {
 /*
  * Densité adaptée à la taille réelle de l'écran.
  *
- * La salle des marchés est dense par nature : sur un écran de bureau on veut
- * voir le graphique, le fil et le portefeuille d'un seul coup d'œil. Sur une
- * tablette en paysage, cette même densité rend les libellés illisibles.
+ * Première tentative, à ne pas refaire : relever `html { font-size }` à 18 px
+ * sous 1280 px. Cela agrandit bien le texte, mais l'échelle d'espacement de
+ * Tailwind est elle aussi en rem — hauteurs, marges, rembourrages et
+ * min-height se retrouvaient gonflés de 12,5 % du même coup. Le graphique
+ * devenait démesuré et toute l'interface respirait trop.
  *
- * Toutes les tailles de texte de l'application sont exprimées en rem, donc
- * relever la taille de base ici agrandit tout d'un coup, sans toucher à
- * cent vingt classes une par une. En dessous de 1280 px on desserre ; à
- * partir de là, on retrouve la densité voulue.
+ * On ne touche donc qu'aux tailles de texte, et seulement aux plus petites.
+ * Les sélecteurs échappés visent exactement les classes utilisées dans
+ * l'application ; la mise en page, elle, ne bouge pas d'un pixel.
  */
-html {
-  font-size: 18px;
-}
+@media (max-width: 1279px) {
+  .text-\[0\.7rem\] {
+    font-size: 0.8rem;
+  }
 
-@media (min-width: 1280px) {
-  html {
-    font-size: 16px;
+  .text-\[0\.72rem\] {
+    font-size: 0.82rem;
+  }
+
+  .text-xs {
+    font-size: 0.86rem;
+  }
+
+  .text-sm {
+    font-size: 0.95rem;
   }
 }
 
