@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import {
+  cleFournisseurDepuisEnvironnement,
   enregistrerCle,
   lireCle,
   supprimerCle,
@@ -106,11 +107,20 @@ export async function basculerFournisseur(
 
   const implementation = adaptateur(code);
   if (actif && implementation?.capacites().necessiteCle) {
+    // Même raison qu'au test : une clé posée dans l'environnement suffit à
+    // faire tourner le fournisseur, donc elle doit suffire à l'activer.
     const client = clientAdminOptionnel();
-    if (!client) return { ok: false, message: CONFIG_MANQUANTE };
-    const cle = await lireCle(client, profilId, code);
+    const cle = client
+      ? await lireCle(client, profilId, code)
+      : cleFournisseurDepuisEnvironnement(code);
     if (!cle) {
-      return { ok: false, message: 'Ce fournisseur exige une clé API : enregistre-la d’abord.' };
+      const variables = variablesReconnuesFournisseur(code);
+      return {
+        ok: false,
+        message:
+          'Ce fournisseur exige une clé API : enregistre-la d’abord' +
+          (variables.length > 0 ? `, ou pose ${variables[0]} chez l’hébergeur.` : '.'),
+      };
     }
   }
 
@@ -198,11 +208,42 @@ export async function testerFournisseur(code: string): Promise<ResultatFournisse
   }
 
   const client = clientAdminOptionnel();
-  const cle = implementation.capacites().necessiteCle
-    ? client
-      ? ((await lireCle(client, profilId, code)) ?? undefined)
-      : undefined
+  // Sans client à privilèges on ne peut pas lire la base, mais l'environnement
+  // reste lisible : l'ignorer ferait dire « aucune clé » à un serveur qui en
+  // détient une, et c'est le message qui envoie chercher au mauvais endroit.
+  const necessiteCle = implementation.capacites().necessiteCle;
+  const cle = necessiteCle
+    ? ((client
+        ? await lireCle(client, profilId, code)
+        : cleFournisseurDepuisEnvironnement(code)) ?? undefined)
     : undefined;
+
+  // Un appel sortant sans clé ne peut que rater : autant nommer tout de suite
+  // les endroits regardés plutôt que de dépenser une requête pour l'apprendre.
+  if (necessiteCle && !cle) {
+    const variables = variablesReconnuesFournisseur(code);
+    const message =
+      'Aucune clé trouvée pour ce fournisseur, ni enregistrée dans l’application' +
+      (variables.length > 0
+        ? `, ni dans les variables d’environnement du serveur (${variables.join(' ou ')}). ` +
+          'Une variable ajoutée chez l’hébergeur n’atteint pas un déploiement déjà en ligne : il faut redéployer, et vérifier qu’elle couvre bien l’environnement testé.'
+        : '.');
+
+    if (client) {
+      await client
+        .from('fournisseurs_donnees')
+        .update({
+          dernier_statut: 'ERREUR',
+          derniere_erreur: message,
+          derniere_verification_le: new Date().toISOString(),
+        })
+        .eq('profil_id', profilId)
+        .eq('code', code);
+    }
+
+    revalidatePath('/reglages/fournisseurs');
+    return { ok: false, message };
+  }
 
   const controleur = new AbortController();
   const minuterie = setTimeout(() => controleur.abort(), 10_000);
