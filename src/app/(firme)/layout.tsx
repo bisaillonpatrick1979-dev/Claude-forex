@@ -35,15 +35,18 @@ export default async function LayoutFirme({ children }: { children: React.ReactN
   const mode: ModeOperation = profil?.mode_operation ?? 'PAPIER_AUTONOME';
 
   return (
-    <div className="flex h-dvh flex-col">
+    // La hauteur n'est verrouillée à l'écran qu'à partir de `xl`. En dessous —
+    // tablette en paysage comprise — c'est la page entière qui défile, plutôt
+    // que chaque panneau dans son coin.
+    <div className="flex min-h-dvh flex-col xl:h-dvh">
       <BarreSuperieure
         courriel={profil?.courriel ?? ''}
         mode={mode}
         gele={resultatPortefeuille.data?.gele ?? false}
       />
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex flex-1 flex-col lg:flex-row xl:min-h-0">
         <NavigationLaterale />
-        <main className="min-h-0 flex-1 overflow-auto p-3">{children}</main>
+        <main className="flex-1 p-3 xl:min-h-0 xl:overflow-auto">{children}</main>
       </div>
     </div>
   );

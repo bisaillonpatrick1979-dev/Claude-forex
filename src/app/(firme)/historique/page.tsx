@@ -75,7 +75,7 @@ export default async function PageHistorique() {
                 <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-texte-attenue">
                   {lecon.contenu}
                 </p>
-                <p className="chiffre mt-1.5 text-[10px] text-texte-attenue/60">
+                <p className="chiffre mt-1.5 text-[0.72rem] text-texte-attenue/60">
                   {lecon.symboles?.code ?? 'tous instruments'} ·{' '}
                   {new Date(lecon.cree_le).toLocaleString('fr-CA')}
                   {lecon.etiquettes.length > 0 ? ` · ${lecon.etiquettes.join(', ')}` : ''}

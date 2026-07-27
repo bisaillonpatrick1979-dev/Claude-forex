@@ -95,7 +95,7 @@ export default async function PageValidation() {
           <Panneau titre="Décidées récemment">
             <ul className="flex flex-col gap-1">
               {recentes.map((ligne) => (
-                <li key={ligne.id} className="chiffre flex flex-wrap items-baseline gap-2 text-[11px]">
+                <li key={ligne.id} className="chiffre flex flex-wrap items-baseline gap-2 text-xs">
                   <span
                     className={
                       ligne.statut === 'ACCEPTEE'

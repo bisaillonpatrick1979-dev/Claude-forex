@@ -206,20 +206,20 @@ export function FilSpecialistes({
           Débriefer
         </button>
         {etatCycle ? (
-          <span className="chiffre ml-auto text-[10px] uppercase tracking-wider text-texte-attenue">
+          <span className="chiffre ml-auto text-[0.72rem] uppercase tracking-wider text-texte-attenue">
             {LIBELLES_ETAPES[etatCycle] ?? etatCycle}
           </span>
         ) : null}
       </div>
 
       {blocage ? (
-        <p className="shrink-0 rounded border border-alerte/40 bg-alerte/10 px-2 py-1 text-[11px] text-alerte">
+        <p className="shrink-0 rounded border border-alerte/40 bg-alerte/10 px-2 py-1 text-xs text-alerte">
           {blocage}
         </p>
       ) : null}
 
       {retour ? (
-        <p className="shrink-0 rounded border border-bordure bg-panneau-clair px-2 py-1 text-[11px] text-texte-attenue">
+        <p className="shrink-0 rounded border border-bordure bg-panneau-clair px-2 py-1 text-xs text-texte-attenue">
           {retour}
         </p>
       ) : null}
@@ -248,30 +248,30 @@ function Intervention({
   const couleur = agent?.couleur ?? '#64748b';
 
   return (
-    <article className="rounded border border-bordure bg-panneau-clair px-2 py-1.5">
+    <article className="rounded border border-bordure bg-panneau-clair px-3 py-2.5">
       <header className="flex items-center gap-1.5">
         <span
           aria-hidden
           className="h-1.5 w-1.5 shrink-0 rounded-full"
           style={{ backgroundColor: couleur }}
         />
-        <span className="text-[11px] font-medium">{nom}</span>
-        <span className="chiffre ml-auto text-[9px] uppercase tracking-wider text-texte-attenue">
+        <span className="text-sm font-medium">{nom}</span>
+        <span className="chiffre ml-auto text-[0.7rem] uppercase tracking-wider text-texte-attenue">
           {LIBELLES_ETAPES[message.etat] ?? message.etat}
           {message.tour > 0 ? ` · tour ${message.tour}` : ''}
         </span>
       </header>
 
       {message.en_cours ? (
-        <p className="mt-1 text-[11px] italic text-texte-attenue">réfléchit…</p>
+        <p className="mt-1.5 text-sm italic text-texte-attenue">réfléchit…</p>
       ) : (
-        <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-texte">
+        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-texte">
           {message.contenu}
         </p>
       )}
 
       {message.cout_usd !== null && message.cout_usd > 0 ? (
-        <p className="chiffre mt-1 text-[9px] text-texte-attenue/70">
+        <p className="chiffre mt-1 text-[0.7rem] text-texte-attenue/70">
           {message.tokens_entree ?? 0} + {message.tokens_sortie ?? 0} tokens ·{' '}
           {message.cout_usd.toFixed(4)} $ US
         </p>

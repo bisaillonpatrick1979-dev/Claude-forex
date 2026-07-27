@@ -91,7 +91,7 @@ export function SondeMarche({ symboles }: { symboles: readonly { code: string; l
           type="button"
           disabled={enCours}
           onClick={() => sonder(false)}
-          className="rounded bg-accent px-2.5 py-1.5 text-[11px] font-medium text-fond disabled:opacity-40"
+          className="rounded bg-accent px-2.5 py-1.5 text-xs font-medium text-fond disabled:opacity-40"
         >
           {enCours ? 'Appel…' : 'Récupérer'}
         </button>
@@ -100,7 +100,7 @@ export function SondeMarche({ symboles }: { symboles: readonly { code: string; l
           disabled={enCours}
           onClick={() => sonder(true)}
           title="Ignore le cache et force un appel fournisseur"
-          className="rounded border border-bordure px-2.5 py-1.5 text-[11px] text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+          className="rounded border border-bordure px-2.5 py-1.5 text-xs text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
         >
           Forcer l’appel
         </button>
@@ -150,7 +150,7 @@ export function SondeMarche({ symboles }: { symboles: readonly { code: string; l
           ) : null}
 
           {reponse.incidents && reponse.incidents.length > 0 ? (
-            <ul className="mt-2 flex flex-col gap-0.5 text-[11px] text-texte-attenue">
+            <ul className="mt-2 flex flex-col gap-0.5 text-xs text-texte-attenue">
               {reponse.incidents.map((incident, index) => (
                 <li key={index}>
                   <span className="chiffre">{incident.fournisseur}</span> — {incident.raison}

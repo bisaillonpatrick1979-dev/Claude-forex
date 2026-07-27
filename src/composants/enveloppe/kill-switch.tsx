@@ -33,14 +33,14 @@ export function KillSwitch({ gele }: { gele: boolean }) {
   if (gele) {
     return (
       <div className="flex items-center gap-2">
-        <span className="chiffre rounded border border-baisse/50 bg-baisse/10 px-2 py-1 text-[11px] uppercase tracking-wider text-baisse">
+        <span className="chiffre rounded border border-baisse/50 bg-baisse/10 px-2 py-1 text-xs uppercase tracking-wider text-baisse">
           Firme gelée
         </span>
         <button
           type="button"
           onClick={degeler}
           disabled={enCours}
-          className="text-[11px] text-texte-attenue underline-offset-4 hover:underline disabled:opacity-50"
+          className="text-xs text-texte-attenue underline-offset-4 hover:underline disabled:opacity-50"
         >
           Dégeler
         </button>
@@ -50,7 +50,7 @@ export function KillSwitch({ gele }: { gele: boolean }) {
 
   return (
     <div className="relative flex items-center gap-2">
-      {message ? <span className="hidden text-[11px] text-texte-attenue sm:inline">{message}</span> : null}
+      {message ? <span className="hidden text-xs text-texte-attenue sm:inline">{message}</span> : null}
 
       {confirmation ? (
         <>
@@ -58,14 +58,14 @@ export function KillSwitch({ gele }: { gele: boolean }) {
             type="button"
             onClick={arreter}
             disabled={enCours}
-            className="chiffre rounded bg-baisse px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-white disabled:opacity-50"
+            className="chiffre rounded bg-baisse px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-white disabled:opacity-50"
           >
             {enCours ? 'Arrêt…' : 'Confirmer l’arrêt'}
           </button>
           <button
             type="button"
             onClick={() => setConfirmation(false)}
-            className="text-[11px] text-texte-attenue underline-offset-4 hover:underline"
+            className="text-xs text-texte-attenue underline-offset-4 hover:underline"
           >
             Annuler
           </button>
@@ -75,7 +75,7 @@ export function KillSwitch({ gele }: { gele: boolean }) {
           type="button"
           onClick={() => setConfirmation(true)}
           title="Arrête les agents, annule les ordres en attente et gèle le portefeuille"
-          className="chiffre rounded border border-baisse/50 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-baisse transition-colors hover:bg-baisse/10"
+          className="chiffre rounded border border-baisse/50 px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-baisse transition-colors hover:bg-baisse/10"
         >
           Kill switch
         </button>

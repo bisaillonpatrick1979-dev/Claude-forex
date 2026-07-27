@@ -115,7 +115,7 @@ export function ZoneGraphique({
               type="button"
               onClick={() => setIntervalle(code)}
               className={[
-                'chiffre rounded px-1.5 py-0.5 text-[11px] transition-colors',
+                'chiffre rounded px-1.5 py-0.5 text-xs transition-colors',
                 code === intervalle ? 'bg-panneau-clair text-texte' : 'text-texte-attenue hover:text-texte',
               ].join(' ')}
             >
@@ -134,7 +134,7 @@ export function ZoneGraphique({
                 setIndicateurs((precedent) => ({ ...precedent, [cle]: !precedent[cle] }))
               }
               className={[
-                'chiffre rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wider transition-colors',
+                'chiffre rounded border px-1.5 py-0.5 text-[0.72rem] uppercase tracking-wider transition-colors',
                 indicateurs[cle]
                   ? 'border-bordure-vive text-texte'
                   : 'border-bordure text-texte-attenue hover:text-texte',
@@ -150,12 +150,12 @@ export function ZoneGraphique({
             <span className="chiffre text-xs">{mesures.dernier.toFixed(decimales)}</span>
           ) : null}
           {mesures.rsi !== null ? (
-            <span className="chiffre text-[11px] text-texte-attenue">
+            <span className="chiffre text-xs text-texte-attenue">
               RSI {mesures.rsi.toFixed(1)}
             </span>
           ) : null}
           {mesures.atr !== null ? (
-            <span className="chiffre text-[11px] text-texte-attenue">
+            <span className="chiffre text-xs text-texte-attenue">
               ATR {mesures.atr.toFixed(decimales)}
             </span>
           ) : null}
@@ -164,7 +164,7 @@ export function ZoneGraphique({
             onClick={etat.rafraichir}
             disabled={etat.chargement}
             title="Ignore le cache et force un appel fournisseur"
-            className="rounded border border-bordure px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+            className="rounded border border-bordure px-1.5 py-0.5 text-[0.72rem] uppercase tracking-wider text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
           >
             {etat.chargement ? '…' : 'Actualiser'}
           </button>
@@ -191,7 +191,7 @@ export function ZoneGraphique({
       </div>
 
       {/* Provenance des données — jamais masquée */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-bordure px-2 py-1 text-[11px]">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-bordure px-2 py-1 text-xs">
         {etat.perime ? (
           <span className="chiffre rounded border border-alerte/50 bg-alerte/10 px-1.5 py-0.5 uppercase tracking-wider text-alerte">
             Données périmées

@@ -78,7 +78,7 @@ export function PositionsOuvertes({
               </span>
             </div>
 
-            <div className="chiffre mt-0.5 flex flex-wrap gap-x-2 text-[10px] text-texte-attenue">
+            <div className="chiffre mt-0.5 flex flex-wrap gap-x-2 text-[0.72rem] text-texte-attenue">
               <span>entrée {position.prixEntree.toFixed(position.decimales)}</span>
               <span>
                 stop {position.stopLoss === null ? '—' : position.stopLoss.toFixed(position.decimales)}
@@ -100,7 +100,7 @@ export function PositionsOuvertes({
                     setMessage(resultat.message);
                   })
                 }
-                className="ml-auto text-[10px] text-texte-attenue underline-offset-4 hover:text-texte hover:underline disabled:opacity-40"
+                className="ml-auto text-[0.72rem] text-texte-attenue underline-offset-4 hover:text-texte hover:underline disabled:opacity-40"
               >
                 Fermer
               </button>
@@ -109,7 +109,7 @@ export function PositionsOuvertes({
         );
       })}
 
-      {message ? <p className="text-[10px] text-texte-attenue">{message}</p> : null}
+      {message ? <p className="text-[0.72rem] text-texte-attenue">{message}</p> : null}
     </div>
   );
 }
@@ -140,12 +140,12 @@ export function OrdresEnAttente({
                 </span>{' '}
                 {ordre.symbole} {ordre.quantite}
               </span>
-              <span className="text-[10px] text-texte-attenue">
+              <span className="text-[0.72rem] text-texte-attenue">
                 {ordre.type.toLowerCase()}
                 {ordre.prixDemande !== null ? ` @ ${ordre.prixDemande}` : ''}
               </span>
             </div>
-            <p className="chiffre mt-0.5 text-[10px] text-texte-attenue">
+            <p className="chiffre mt-0.5 text-[0.72rem] text-texte-attenue">
               {ordre.statut === 'PARTIELLEMENT_REMPLI'
                 ? 'partiellement rempli'
                 : 'en attente de la prochaine bougie'}
@@ -164,12 +164,12 @@ export function OrdresEnAttente({
           })
         }
         title="Fait passer le moteur sur les bougies fermées non encore traitées"
-        className="rounded border border-bordure px-2 py-1 text-[10px] uppercase tracking-wider text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+        className="rounded border border-bordure px-2 py-1 text-[0.72rem] uppercase tracking-wider text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
       >
         {enCours ? 'Traitement…' : 'Traiter le marché'}
       </button>
 
-      {message ? <p className="text-[10px] text-texte-attenue">{message}</p> : null}
+      {message ? <p className="text-[0.72rem] text-texte-attenue">{message}</p> : null}
     </div>
   );
 }

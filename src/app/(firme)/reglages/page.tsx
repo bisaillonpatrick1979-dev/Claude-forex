@@ -36,7 +36,7 @@ export default async function PageReglages() {
           action={
             <Link
               href="/reglages/fournisseurs"
-              className="text-[11px] text-accent underline-offset-4 hover:underline"
+              className="text-xs text-accent underline-offset-4 hover:underline"
             >
               Configurer
             </Link>
@@ -73,7 +73,7 @@ export default async function PageReglages() {
               </tbody>
             </table>
           )}
-          <p className="mt-3 text-[11px] text-texte-attenue">
+          <p className="mt-3 text-xs text-texte-attenue">
             Les clés sont chiffrées au repos (AES-256-GCM) et ne sont jamais renvoyées au
             navigateur. Saisie, test de connexion et priorités par classe d’actifs sur la page
             Configurer.
@@ -102,7 +102,7 @@ export default async function PageReglages() {
               />
             </dl>
           )}
-          <p className="mt-3 text-[11px] text-texte-attenue">
+          <p className="mt-3 text-xs text-texte-attenue">
             Ces plafonds sont appliqués par le moteur de risque en TypeScript côté serveur, pas par
             les prompts des agents. Édition en phase 3.
           </p>

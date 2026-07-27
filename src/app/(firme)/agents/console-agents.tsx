@@ -93,7 +93,7 @@ export function ConsoleAgents({ agents }: { agents: readonly AgentAffiche[] }) {
                 setRepriseMessage(resultat.message);
               })
             }
-            className="rounded border border-bordure px-2 py-1 text-[11px] text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+            className="rounded border border-bordure px-2 py-1 text-xs text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
           >
             Tout remettre en validation
           </button>
@@ -117,7 +117,7 @@ export function ConsoleAgents({ agents }: { agents: readonly AgentAffiche[] }) {
           )}
         </p>
         {repriseMessage ? (
-          <p className="mt-2 text-[11px] text-texte-attenue">{repriseMessage}</p>
+          <p className="mt-2 text-xs text-texte-attenue">{repriseMessage}</p>
         ) : null}
       </Panneau>
 
@@ -154,11 +154,11 @@ function CarteAgent({ agent }: { agent: AgentAffiche }) {
               style={{ backgroundColor: agent.couleur }}
             />
             <span className="text-sm">{agent.nom}</span>
-            <span className="chiffre text-[11px] text-texte-attenue">
+            <span className="chiffre text-xs text-texte-attenue">
               {LIBELLES_ROLES[agent.role]}
             </span>
           </div>
-          <p className="chiffre mt-0.5 text-[11px] text-texte-attenue">
+          <p className="chiffre mt-0.5 text-xs text-texte-attenue">
             {agent.fournisseur} · {agent.modele}
             {agent.versionMandat !== null ? ` · mandat v${agent.versionMandat}` : ''}
           </p>
@@ -166,15 +166,15 @@ function CarteAgent({ agent }: { agent: AgentAffiche }) {
 
         <div className="flex items-center gap-2">
           {!agent.actif ? (
-            <span className="chiffre text-[11px] uppercase tracking-wider text-texte-attenue">
+            <span className="chiffre text-xs uppercase tracking-wider text-texte-attenue">
               désactivé
             </span>
           ) : suspendu ? (
-            <span className="chiffre text-[11px] uppercase tracking-wider text-alerte">
+            <span className="chiffre text-xs uppercase tracking-wider text-alerte">
               suspendu
             </span>
           ) : (
-            <span className={`chiffre text-[11px] uppercase tracking-wider ${COULEUR_NIVEAU[agent.niveau]}`}>
+            <span className={`chiffre text-xs uppercase tracking-wider ${COULEUR_NIVEAU[agent.niveau]}`}>
               {DESCRIPTIONS_NIVEAUX[agent.niveau].libelle}
             </span>
           )}
@@ -182,7 +182,7 @@ function CarteAgent({ agent }: { agent: AgentAffiche }) {
             type="button"
             disabled={enCours}
             onClick={() => executer(() => basculerAgent(agent.id, !agent.actif))}
-            className="rounded border border-bordure px-2 py-1 text-[11px] text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+            className="rounded border border-bordure px-2 py-1 text-xs text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
           >
             {agent.actif ? 'Désactiver' : 'Réactiver'}
           </button>
@@ -190,7 +190,7 @@ function CarteAgent({ agent }: { agent: AgentAffiche }) {
             type="button"
             onClick={() => setOuvert((valeur) => !valeur)}
             aria-expanded={ouvert}
-            className="rounded border border-bordure px-2 py-1 text-[11px] text-texte-attenue transition-colors hover:text-texte"
+            className="rounded border border-bordure px-2 py-1 text-xs text-texte-attenue transition-colors hover:text-texte"
           >
             {ouvert ? 'Replier' : 'Régler'}
           </button>
@@ -212,7 +212,7 @@ function CarteAgent({ agent }: { agent: AgentAffiche }) {
               }
               onClick={() => executer(() => definirNiveauAutonomie(agent.id, niveau))}
               className={[
-                'chiffre rounded px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors',
+                'chiffre rounded px-2.5 py-1 text-xs uppercase tracking-wider transition-colors',
                 agent.niveau === niveau
                   ? niveau === 'AUTONOME'
                     ? 'bg-alerte/20 text-alerte'
@@ -227,7 +227,7 @@ function CarteAgent({ agent }: { agent: AgentAffiche }) {
             </button>
           );
         })}
-        <span className="text-[11px] text-texte-attenue">
+        <span className="text-xs text-texte-attenue">
           {DESCRIPTIONS_NIVEAUX[agent.niveau].description}
         </span>
       </div>
@@ -244,7 +244,7 @@ function CarteAgent({ agent }: { agent: AgentAffiche }) {
 
       {message ? (
         <p
-          className={`mt-2 text-[11px] ${message.ok ? 'text-texte-attenue' : 'text-baisse'}`}
+          className={`mt-2 text-xs ${message.ok ? 'text-texte-attenue' : 'text-baisse'}`}
           role={message.ok ? undefined : 'alert'}
         >
           {message.texte}
@@ -277,7 +277,7 @@ function Droits({
 
   return (
     <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <legend className="text-[11px] uppercase tracking-[0.14em] text-texte-attenue">Droits</legend>
+      <legend className="text-xs uppercase tracking-[0.14em] text-texte-attenue">Droits</legend>
       {droits.map((droit) => (
         <label key={droit.cle} className="flex items-center gap-1.5 text-xs">
           <input
@@ -295,7 +295,7 @@ function Droits({
         </label>
       ))}
       {agent.niveau === 'OBSERVATEUR' ? (
-        <span className="text-[11px] text-texte-attenue">
+        <span className="text-xs text-texte-attenue">
           Un observateur n’a aucun droit d’action : passez-le en proposition d’abord.
         </span>
       ) : null}
@@ -330,11 +330,11 @@ function Limites({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-texte-attenue">Limites</p>
+      <p className="text-xs uppercase tracking-[0.14em] text-texte-attenue">Limites</p>
       <div className="flex flex-wrap items-end gap-2">
         {champs.map((champ) => (
           <label key={champ.libelle} className="flex flex-col gap-1">
-            <span className="text-[10px] text-texte-attenue">{champ.libelle}</span>
+            <span className="text-[0.72rem] text-texte-attenue">{champ.libelle}</span>
             <input
               type="number"
               min={0}
@@ -361,12 +361,12 @@ function Limites({
               }),
             )
           }
-          className="rounded bg-accent px-2.5 py-1.5 text-[11px] font-medium text-fond disabled:opacity-40"
+          className="rounded bg-accent px-2.5 py-1.5 text-xs font-medium text-fond disabled:opacity-40"
         >
           Enregistrer
         </button>
       </div>
-      <p className="text-[11px] leading-relaxed text-texte-attenue">
+      <p className="text-xs leading-relaxed text-texte-attenue">
         Vide = pas de limite propre à l’agent ; les plafonds du portefeuille s’appliquent de toute
         façon, et c’est toujours le plus strict des deux qui gagne. Le seuil de validation ne
         concerne qu’un agent autonome : au-delà, il vous redemande.
@@ -397,7 +397,7 @@ function Perimetre({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-texte-attenue">Périmètre</p>
+      <p className="text-xs uppercase tracking-[0.14em] text-texte-attenue">Périmètre</p>
       <div className="flex flex-wrap items-center gap-2">
         {CLASSES.map((classe) => (
           <button
@@ -406,7 +406,7 @@ function Perimetre({
             disabled={enCours}
             onClick={() => basculerClasse(classe)}
             className={[
-              'chiffre rounded px-2 py-1 text-[10px] uppercase tracking-wider transition-colors',
+              'chiffre rounded px-2 py-1 text-[0.72rem] uppercase tracking-wider transition-colors',
               classes.includes(classe)
                 ? 'bg-panneau-clair text-texte'
                 : 'border border-bordure text-texte-attenue hover:text-texte',
@@ -425,7 +425,7 @@ function Perimetre({
           className="chiffre min-w-44 flex-1 rounded border border-bordure bg-fond px-2 py-1 text-xs outline-none focus:border-accent disabled:opacity-40"
         />
       </div>
-      <p className="text-[11px] text-texte-attenue">
+      <p className="text-xs text-texte-attenue">
         Rien de coché et champ vide = aucune restriction d’instrument.
       </p>
     </div>
@@ -445,14 +445,14 @@ function Suspension({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-texte-attenue">Suspension</p>
+      <p className="text-xs uppercase tracking-[0.14em] text-texte-attenue">Suspension</p>
       {[30, 120, 1440].map((minutes) => (
         <button
           key={minutes}
           type="button"
           disabled={enCours}
           onClick={() => executer(() => suspendreAgent(agent.id, minutes))}
-          className="rounded border border-bordure px-2 py-1 text-[11px] text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
+          className="rounded border border-bordure px-2 py-1 text-xs text-texte-attenue transition-colors hover:text-texte disabled:opacity-40"
         >
           {minutes >= 1440 ? '24 h' : `${minutes} min`}
         </button>
@@ -462,12 +462,12 @@ function Suspension({
           type="button"
           disabled={enCours}
           onClick={() => executer(() => reprendreAgent(agent.id))}
-          className="rounded border border-bordure px-2 py-1 text-[11px] text-accent transition-colors hover:text-texte disabled:opacity-40"
+          className="rounded border border-bordure px-2 py-1 text-xs text-accent transition-colors hover:text-texte disabled:opacity-40"
         >
           Lever la suspension
         </button>
       ) : null}
-      <span className="text-[11px] text-texte-attenue">
+      <span className="text-xs text-texte-attenue">
         Met l’agent de côté sans perdre ses réglages, contrairement à la désactivation.
       </span>
     </div>
@@ -487,7 +487,7 @@ function Mandat({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-texte-attenue">
+      <p className="text-xs uppercase tracking-[0.14em] text-texte-attenue">
         Mandat {agent.versionMandat !== null ? `(version ${agent.versionMandat})` : ''}
       </p>
       <textarea
@@ -502,11 +502,11 @@ function Mandat({
           type="button"
           disabled={enCours || contenu.trim() === agent.mandat.trim()}
           onClick={() => executer(() => enregistrerMandat(agent.id, contenu))}
-          className="rounded bg-accent px-2.5 py-1.5 text-[11px] font-medium text-fond disabled:opacity-40"
+          className="rounded bg-accent px-2.5 py-1.5 text-xs font-medium text-fond disabled:opacity-40"
         >
           Publier une nouvelle version
         </button>
-        <span className="text-[11px] text-texte-attenue">
+        <span className="text-xs text-texte-attenue">
           L’ancienne version est conservée : une décision passée reste rattachée au texte qui l’a
           produite.
         </span>

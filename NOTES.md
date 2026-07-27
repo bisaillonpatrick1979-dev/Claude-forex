@@ -856,6 +856,72 @@ un agent — c'est dit plutôt que perdu.
 
 ---
 
+## Décisions d'interface (tablette et densité)
+
+### La hauteur n'est verrouillée qu'à partir de 1280 px
+
+L'application tenait en `h-dvh` avec un défilement interne par panneau. Sur un
+écran de bureau c'est le bon choix : graphique, fil et portefeuille d'un seul
+coup d'œil. Sur une tablette en paysage, la même règle transforme chaque
+panneau en boîte de trois lignes qu'il faut fouiller.
+
+En dessous de `xl`, c'est désormais la page entière qui défile et les panneaux
+grandissent avec leur contenu. `Panneau` ne défile plus par défaut : le
+défilement interne est devenu explicite (`defilement`) et reste ignoré sous
+`xl`, même quand il est demandé.
+
+### Toutes les tailles de texte sont en rem
+
+Cent vingt classes `text-[10px]` / `text-[11px]` étaient réparties dans le
+code : illisibles sur tablette, et intouchables autrement qu'une par une. Elles
+sont converties en unités relatives, et la taille de base passe à 18 px en
+dessous de 1280 px, 16 px au-delà. Un seul point de réglage agrandit tout,
+et la densité voulue revient sur grand écran.
+
+### L'ordre d'empilement change avec la largeur
+
+Empilé, le graphique et le poste de commande des agents passent devant le
+billet d'ordre — ce sont eux qu'on regarde. Obtenu par `order`, pas par un
+second balisage : deux arbres à maintenir divergeraient.
+
+---
+
+## Décisions (fournisseurs de modèles)
+
+### DeepSeek et Mistral partagent l'adaptateur d'OpenAI
+
+Les trois exposent `/v1/chat/completions` avec les mêmes champs et les mêmes
+compteurs de tokens. Seules l'URL de base, le nom affiché et la grille
+tarifaire changent. Écrire trois fichiers quasi identiques garantirait qu'un
+correctif n'en atteigne qu'un.
+
+L'énumération `fournisseur_llm` n'accueille que ce qui est réellement
+implémenté et testé : PostgreSQL interdit de retirer une valeur, une liste
+d'intentions y resterait pour toujours.
+
+### Un écran distinct des fournisseurs de données
+
+Ce ne sont ni les mêmes comptes, ni les mêmes factures, ni les mêmes
+conséquences en cas d'absence : une clé de marché manquante fait basculer le
+routeur sur le fournisseur suivant, une clé de modèle manquante rend l'agent
+muet. Le stockage reste commun (`cles_api`, AES-256-GCM) — deux mécanismes de
+chiffrement en parallèle, c'est un de trop à auditer.
+
+Le test de connexion fait un vrai aller-retour, sur le modèle le moins cher de
+la grille : vérifier le format d'une clé ne prouve rien sur sa validité, sur
+l'approvisionnement du compte ni sur l'accès au modèle. Le champ de saisie est
+vidé dès l'envoi, y compris quand la clé est refusée.
+
+### Vitesses de rejeu exprimées en bougies par seconde
+
+Pas en multiplicateur de temps : « ×100 » n'a pas le même sens sur du M1 et sur
+du D1. Cinq cadences, jusqu'à environ 4 000 bougies par seconde — un an de H1
+en moins de deux secondes. Le lot par appel est plafonné à 500 côté serveur :
+au-delà, la fonction dépasse sa durée maximale d'exécution et le lot entier est
+perdu. Pour aller plus vite, on appelle plus souvent, pas plus gros.
+
+---
+
 ## Limites annoncées franchement (phase 4b)
 
 ### Quinze ans d'historique : oui en simulé, non en données réelles

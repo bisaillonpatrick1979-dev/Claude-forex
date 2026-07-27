@@ -70,7 +70,7 @@ export function BilletOrdre({
             type="button"
             onClick={() => setSens(option)}
             className={[
-              'chiffre flex-1 rounded px-2 py-1.5 text-[11px] uppercase tracking-wider transition-colors',
+              'chiffre flex-1 rounded px-2 py-1.5 text-xs uppercase tracking-wider transition-colors',
               sens === option
                 ? option === 'ACHAT'
                   ? 'bg-hausse/20 text-hausse'
@@ -90,7 +90,7 @@ export function BilletOrdre({
             type="button"
             onClick={() => setType(option)}
             className={[
-              'chiffre flex-1 rounded border px-1.5 py-1 text-[10px] uppercase tracking-wider transition-colors',
+              'chiffre flex-1 rounded border px-1.5 py-1 text-[0.72rem] uppercase tracking-wider transition-colors',
               type === option
                 ? 'border-bordure-vive text-texte'
                 : 'border-bordure text-texte-attenue hover:text-texte',
@@ -127,26 +127,26 @@ export function BilletOrdre({
         type="button"
         onClick={soumettre}
         disabled={enCours}
-        className="rounded bg-accent px-2.5 py-1.5 text-[11px] font-medium text-fond transition-opacity hover:opacity-90 disabled:opacity-40"
+        className="rounded bg-accent px-2.5 py-1.5 text-xs font-medium text-fond transition-opacity hover:opacity-90 disabled:opacity-40"
       >
         {enCours ? 'Contrôle du risque…' : `Proposer ${sens.toLowerCase()} ${symbole}`}
       </button>
 
-      <p className="text-[10px] leading-snug text-texte-attenue">
+      <p className="text-[0.72rem] leading-snug text-texte-attenue">
         L’ordre est contrôlé par le moteur de risque, puis rempli sur la bougie suivante — jamais
         sur celle qui a servi à décider.
       </p>
 
       {resultat ? (
         <div
-          className={`rounded border px-2 py-1.5 text-[11px] ${
+          className={`rounded border px-2 py-1.5 text-xs ${
             resultat.ok ? 'border-bordure bg-panneau-clair text-texte-attenue' : 'border-baisse/40 bg-baisse/10 text-baisse'
           }`}
           role={resultat.ok ? undefined : 'alert'}
         >
           <p>{resultat.message}</p>
           {resultat.controles && resultat.controles.length > 0 ? (
-            <ul className="chiffre mt-1 flex flex-col gap-0.5 text-[10px] text-texte-attenue">
+            <ul className="chiffre mt-1 flex flex-col gap-0.5 text-[0.72rem] text-texte-attenue">
               {resultat.controles.map((controle) => (
                 <li key={controle.code}>
                   {controle.statut === 'OK' ? '·' : '!'} {controle.libelle} — {controle.detail}
@@ -173,7 +173,7 @@ function Champ({
 }) {
   return (
     <label className="flex items-center justify-between gap-2">
-      <span className="text-[10px] uppercase tracking-wider text-texte-attenue">{libelle}</span>
+      <span className="text-[0.72rem] uppercase tracking-wider text-texte-attenue">{libelle}</span>
       <input
         type="text"
         inputMode="decimal"

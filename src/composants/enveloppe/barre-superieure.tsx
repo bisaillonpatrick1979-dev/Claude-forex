@@ -27,7 +27,7 @@ export function BarreSuperieure({
     <header className="shrink-0 border-b border-bordure bg-panneau">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
         <div className="flex items-baseline gap-2">
-          <span className="chiffre text-[11px] uppercase tracking-[0.2em] text-texte-attenue">
+          <span className="chiffre text-xs uppercase tracking-[0.2em] text-texte-attenue">
             Trading Floor
           </span>
           <span className="text-sm font-semibold">IA</span>
@@ -39,11 +39,11 @@ export function BarreSuperieure({
 
         <div className="ml-auto flex items-center gap-3">
           <KillSwitch gele={gele} />
-          <span className="hidden text-[11px] text-texte-attenue md:inline">{courriel}</span>
+          <span className="hidden text-xs text-texte-attenue md:inline">{courriel}</span>
           <form action={deconnexion}>
             <button
               type="submit"
-              className="text-[11px] text-texte-attenue underline-offset-4 hover:underline"
+              className="text-xs text-texte-attenue underline-offset-4 hover:underline"
             >
               Quitter
             </button>
@@ -51,7 +51,7 @@ export function BarreSuperieure({
         </div>
       </div>
 
-      <p className="border-t border-bordure px-3 py-1 text-[11px] text-texte-attenue">
+      <p className="border-t border-bordure px-3 py-1 text-xs text-texte-attenue">
         {AVERTISSEMENT_RISQUE}
       </p>
     </header>

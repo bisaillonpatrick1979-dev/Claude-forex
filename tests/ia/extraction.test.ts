@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { accepteTemperature, coutUsd, tarif } from '@/lib/ia/tarifs';
+import { adaptateur, FOURNISSEURS_LLM } from '@/lib/ia';
+import {
+  accepteTemperature,
+  coutUsd,
+  MODELES_PAR_FOURNISSEUR,
+  tarif,
+} from '@/lib/ia/tarifs';
 import { adaptateurMock } from '@/lib/ia/mock';
 import {
   analyser,
@@ -155,6 +161,30 @@ describe('tarifs et contraintes de modèle', () => {
   it('chiffre le coût au tarif publié', () => {
     // 1 M de tokens d'entrée à 5 $ + 1 M de sortie à 25 $.
     expect(coutUsd('claude-opus-5', 1_000_000, 1_000_000)).toBeCloseTo(30, 6);
+  });
+
+  it('tarifie tous les modèles proposés dans l’interface', () => {
+    // Un modèle listé mais non tarifé afficherait « coût inconnu » à
+    // l'utilisateur : autant s'assurer que la grille suit la liste.
+    for (const fournisseur of FOURNISSEURS_LLM) {
+      for (const modele of MODELES_PAR_FOURNISSEUR[fournisseur]) {
+        expect(tarif(modele), `${fournisseur} / ${modele}`).not.toBeNull();
+      }
+    }
+  });
+
+  it('expose un adaptateur pour chaque fournisseur annoncé', () => {
+    for (const fournisseur of FOURNISSEURS_LLM) {
+      const implementation = adaptateur(fournisseur);
+      expect(implementation.code).toBe(fournisseur);
+      expect(implementation.modeles.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('n’exige une clé que des fournisseurs distants', () => {
+    expect(adaptateur('mock').necessiteCle).toBe(false);
+    expect(adaptateur('deepseek').necessiteCle).toBe(true);
+    expect(adaptateur('mistral').necessiteCle).toBe(true);
   });
 });
 

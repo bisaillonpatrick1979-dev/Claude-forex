@@ -45,7 +45,7 @@ export function SelecteurMode({
               onClick={() => choisir(mode)}
               title={DESCRIPTIONS_MODES[mode].description}
               className={[
-                'chiffre rounded px-2 py-1 text-[11px] uppercase tracking-wider transition-colors',
+                'chiffre rounded px-2 py-1 text-xs uppercase tracking-wider transition-colors',
                 actif ? 'bg-panneau-clair text-texte' : 'text-texte-attenue',
                 autorise ? 'hover:text-texte' : 'cursor-not-allowed opacity-40',
               ].join(' ')}
@@ -55,7 +55,7 @@ export function SelecteurMode({
           );
         })}
       </div>
-      {erreur ? <span className="text-[11px] text-baisse">{erreur}</span> : null}
+      {erreur ? <span className="text-xs text-baisse">{erreur}</span> : null}
     </div>
   );
 }
