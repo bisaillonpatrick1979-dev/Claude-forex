@@ -391,6 +391,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
             ...contexteCommun,
             mandat: agent.mandat,
             nomAgent: agent.nom,
+            role: agent.role,
             strategies,
             consigneRecherche: chercheSurLeWeb ? CONSIGNE_RECHERCHE : null,
           },

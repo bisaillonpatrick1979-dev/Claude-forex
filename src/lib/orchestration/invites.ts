@@ -1,5 +1,9 @@
 import { consignesHorizon, type Horizon } from '@/lib/agents/horizons';
+import { rendreSavoirFaire } from '@/lib/agents/savoir-faire';
 import type { EtatPortefeuille } from '@/lib/execution/types';
+import type { Database } from '@/types/base-de-donnees';
+
+type RoleAgent = Database['public']['Enums']['role_agent'];
 
 import type { InstantaneMarche } from './instantane';
 
@@ -34,6 +38,8 @@ export interface ContexteFirme {
   readonly lecons: readonly string[];
   /** Consigne de recherche web, quand le rôle y a droit. */
   readonly consigneRecherche?: string | null;
+  /** Méthode propre à la spécialité, injectée après le mandat. */
+  readonly role?: RoleAgent | null;
 }
 
 const FORMATS: Readonly<Record<string, string>> = {
@@ -61,6 +67,10 @@ export function construireSysteme(
   const morceaux = [
     contexte.mandat.trim(),
     '',
+    // La méthode vient juste après le mandat, avant tout le reste : c'est la
+    // grille de lecture avec laquelle l'agent doit aborder les données, pas un
+    // rappel à consulter après coup.
+    ...(contexte.role ? [rendreSavoirFaire(contexte.role), ''] : []),
     REGLES_MAISON,
     '',
     `Mode d’opération courant : ${contexte.modeOperation}. Le portefeuille est simulé ; aucun ordre réel n’est transmis à un courtier.`,
