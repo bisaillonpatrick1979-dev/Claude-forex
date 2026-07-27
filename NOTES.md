@@ -15,8 +15,8 @@ Tenu à jour à chaque phase.
 | 3 | Moteur d'exécution simulé + garde-fous de risque | ✅ livrée |
 | 4a | Gouvernance des agents : permissions, autonomie, file de validation | ✅ livrée |
 | 4b | Orchestrateur : cycles LLM, débat, mémoire, enveloppe de capital, rejeu | ✅ livrée |
-| 5 | Salle des marchés en temps réel | ✅ fil des spécialistes livré ; marqueurs de décision sur le graphique à faire |
-| 6 | Backtest chiffré, comparateurs, agent de réflexion automatique | à faire |
+| 5 | Salle des marchés en temps réel : fil des spécialistes, marqueurs de décision | ✅ livrée |
+| 6 | Backtest chiffré et comparateurs (buy-and-hold, stratégie aléatoire) | à faire |
 | 7 | Passerelle broker réel — **à discuter, rien de codé** | bloquée volontairement |
 
 ---
@@ -794,6 +794,65 @@ Non vérifié : le parcours complet depuis le navigateur (soumission par le banc
 apparition dans la file, approbation) — il exige une session authentifiée que ce conteneur ne
 peut pas ouvrir. Le chemin serveur est en revanche le même que celui de l'ordre manuel, déjà
 éprouvé en phase 3, et les deux barrières qu'il ajoute sont couvertes par les tests.
+
+---
+
+## Décisions d'architecture (phase 5)
+
+### Les refus sont marqués au même titre que les exécutions
+
+Le graphique porte trois familles de marqueurs : entrées, sorties, et
+**propositions non exécutées**. La troisième compte autant que les deux autres.
+Sans elle, on ne verrait que les décisions qui ont coûté ou rapporté, jamais
+celles qui ont évité une perte. Un garde-fou qui fait son travail est
+invisible ; c'est précisément ce qu'il faut rendre visible.
+
+Le survol donne la cause exacte, et les causes ne sont jamais confondues :
+refus de permission, refus du moteur de risque, refus de l'utilisateur,
+expiration.
+
+### L'alignement sur la bougie n'est pas cosmétique
+
+lightweight-charts ignore **silencieusement** un marqueur dont l'horodatage ne
+correspond à aucune bougie. Une décision prise à 10 h 03 sur un graphique M5
+doit donc être ramenée à l'ouverture de 10 h 00, faute de quoi elle disparaît
+sans erreur ni avertissement. `construireMarqueurs` réaligne à chaque
+changement d'intervalle — c'est une fonction pure, testée sur ce point précis.
+
+Le calcul a lieu côté navigateur : le symbole et l'intervalle affichés sont un
+état d'interface, et recharger la page à chaque changement d'instrument pour
+trois marqueurs serait absurde. Le serveur charge cent décisions tous symboles
+confondus, le client filtre.
+
+### Le résultat est affiché tel quel
+
+Une sortie perdante affiche `-320.50` en rouge, pas « sortie ». Un P&L absent
+affiche « donnée manquante », pas zéro. C'est la même règle que partout
+ailleurs : les chiffres montrés sont des résultats mesurés, jamais adoucis.
+
+### L'agent de réflexion : une position, une leçon, une fois
+
+`reflechirSurPositionsFermees` débriefe les positions fermées sans leçon
+rattachée. L'unicité par `position_id` n'est pas un détail : sans elle, la
+mémoire se remplirait de doublons et la recherche vectorielle ne rendrait plus
+que dix variantes de la même leçon.
+
+Le débrief tourne à la fin de chaque cycle — **après** l'exécution, pour qu'une
+position fermée pendant ce cycle soit débriefée dans le même passage — et via
+un bouton, pour rattraper l'arriéré après un rejeu qui a fermé trente positions
+d'un coup. Deux positions par cycle, cinq par bouton : mieux vaut rattraper sur
+plusieurs passages que dépenser tout le budget en débriefs au point de ne plus
+pouvoir trader. Le plafond quotidien est revérifié entre chaque position.
+
+L'agent reçoit ce qui était attendu (la vue de marché du cycle d'origine) en
+face de ce qui s'est produit. Sans l'attente, il ne resterait que le résultat,
+et un résultat seul n'apprend rien. On lui demande explicitement de distinguer
+une erreur de méthode d'un simple coup du sort : confondre les deux fait
+désapprendre.
+
+Une leçon dont l'embedding échoue est écrite quand même, marquée « non
+indexée » dans l'historique. Elle reste lisible mais ne sera jamais resservie à
+un agent — c'est dit plutôt que perdu.
 
 ---
 

@@ -33,6 +33,7 @@ import {
   messagePortefeuille,
   resumerPourSuite,
 } from './invites';
+import { reflechirSurPositionsFermees } from './reflexion';
 import {
   indexerStrategiesManquantes,
   recupererLecons,
@@ -748,6 +749,27 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
       cout_usd: compteur.total.cout,
     } as never,
   });
+
+  // ═══ Débrief : la firme apprend de ce qu'elle a déjà fermé ═══
+  //
+  // Après l'exécution, pas avant : une position fermée pendant ce cycle doit
+  // pouvoir être débriefée dans le même passage. Un échec de débrief ne remet
+  // pas en cause le cycle — la décision est prise, l'ordre est parti.
+  const debrief = await reflechirSurPositionsFermees(client, profilId, 2);
+  if (debrief.leconsEcrites > 0) {
+    await messageSysteme(
+      {
+        client,
+        profilId,
+        cycleId: cycle.id,
+        etat: 'JOURNALISATION',
+        sequence: (sequence.valeur += 1),
+        tour: 0,
+      },
+      debrief.message,
+      { lecons: debrief.leconsEcrites },
+    );
+  }
 
   await terminer(client, cycle.id, compteur);
   return finir(cycle.id, 'TERMINE', soumission.message, compteur);

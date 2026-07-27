@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
-import { lancerCycleAgents } from '@/app/actions/cycles';
+import { debrieferPositions, lancerCycleAgents } from '@/app/actions/cycles';
 import { EtatVide } from '@/composants/ui/panneau';
 import { clientNavigateur } from '@/lib/supabase/client';
 import type { Database } from '@/types/base-de-donnees';
@@ -173,6 +173,14 @@ export function FilSpecialistes({
     });
   }, [symbole, intervalle]);
 
+  const debriefer = useCallback(() => {
+    setRetour(null);
+    demarrer(async () => {
+      const resultat = await debrieferPositions();
+      setRetour(resultat.message);
+    });
+  }, []);
+
   const messagesDuCycle = cycleId
     ? messages.filter((message) => message.cycle_id === cycleId)
     : messages;
@@ -188,8 +196,17 @@ export function FilSpecialistes({
         >
           {enCours ? 'Cycle en cours…' : `Réunir les agents sur ${symbole}`}
         </button>
+        <button
+          type="button"
+          onClick={debriefer}
+          disabled={enCours}
+          title="Faire débriefer les positions fermées par l’agent de réflexion"
+          className="rounded border border-bordure-vive px-2 py-1.5 text-xs transition hover:border-accent disabled:opacity-50"
+        >
+          Débriefer
+        </button>
         {etatCycle ? (
-          <span className="chiffre text-[10px] uppercase tracking-wider text-texte-attenue">
+          <span className="chiffre ml-auto text-[10px] uppercase tracking-wider text-texte-attenue">
             {LIBELLES_ETAPES[etatCycle] ?? etatCycle}
           </span>
         ) : null}
