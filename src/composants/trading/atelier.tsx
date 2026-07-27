@@ -71,7 +71,12 @@ export function Atelier({
     // comprise — on veut le graphique puis les agents en premier : ce sont eux
     // qu'on regarde, pas le billet d'ordre. `order` évite de dupliquer le
     // balisage pour obtenir deux dispositions.
-    <div className="cockpit-plein cockpit-flexible grid gap-3 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,24rem)]">
+    // `items-start` est la correction principale : par défaut, une grille étire
+    // chaque colonne à la hauteur de la plus haute. Le fil des spécialistes
+    // grandit à chaque message, et le graphique grandissait avec lui —
+    // jusqu'à occuper tout l'écran. Il garde désormais sa hauteur propre, sauf
+    // en cockpit où l'étirement est justement ce qu'on veut.
+    <div className="cockpit-plein cockpit-flexible cockpit-etirer grid items-start gap-3 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,24rem)]">
       <div className="cockpit-flexible order-3 flex flex-col gap-3 xl:order-1">
         {panneauFirme}
 
@@ -106,7 +111,7 @@ export function Atelier({
           réellement placé. C'est la lecture naturelle — on regarde le prix,
           puis on regarde ce qu'on en a fait. */}
       <div className="cockpit-flexible order-1 flex flex-col gap-3 xl:order-2">
-        <section className="flex h-[38vh] min-h-[19rem] flex-col overflow-hidden rounded-lg border border-bordure bg-panneau xl:h-auto xl:min-h-0 xl:flex-[3]">
+        <section className="cockpit-part-3 flex h-[38vh] min-h-[18rem] max-h-[30rem] flex-col overflow-hidden rounded-lg border border-bordure bg-panneau">
           <ZoneGraphique
             symboles={symboles}
             marqueurs={marqueurs}
@@ -118,7 +123,7 @@ export function Atelier({
           />
         </section>
 
-        <Panneau titre="Placements de la firme" className="xl:flex-[2]">
+        <Panneau titre="Placements de la firme" className="cockpit-part-2">
           <Placements placements={placements} />
         </Panneau>
       </div>
