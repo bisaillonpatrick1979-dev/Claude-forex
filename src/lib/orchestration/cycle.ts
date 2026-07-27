@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { chargerEtat, chargerInstrument } from '@/lib/execution/persistance';
+import { bloc as blocAnnotations } from '@/lib/graphique/annotations';
+import { lireAnnotations } from '@/lib/graphique/depot';
 import { appelerModele, type ResultatAppel } from '@/lib/ia/appel';
 import { budgetSuffisant, etatBudget, type EtatBudget } from '@/lib/ia/budget';
 import { methodeActive } from '@/lib/ia/embeddings';
@@ -273,7 +275,13 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
 
   const compteur = new Compteur(cycle.budget_appels_llm, cycle.budget_secondes, budget);
   const sequence: Sequence = { valeur: 0 };
-  const rendu = rendreInstantane(instantane);
+  // Repères tracés à la main sur ce graphique. C'est ce qu'aucune plateforme
+  // commerciale ne fait : chez elles un trait est un pixel, ici c'est une
+  // entrée du raisonnement. Un agent qui propose d'acheter au travers d'une
+  // résistance marquée par le trader doit s'en expliquer.
+  const annotations = await lireAnnotations(client, profilId, symbole, intervalle);
+  const reperes = blocAnnotations(annotations, instantane.dernierPrix, instantane.decimales);
+  const rendu = reperes ? `${rendreInstantane(instantane)}\n\n${reperes}` : rendreInstantane(instantane);
 
   const contexteMock: ContexteDeterministe = {
     symbole: instantane.symbole,

@@ -82,6 +82,53 @@ export type Database = {
           },
         ];
       };
+      annotations_graphique: {
+        Row: {
+          couleur: string;
+          cree_le: string;
+          id: string;
+          intervalle: string | null;
+          libelle: string | null;
+          maj_le: string;
+          outil: string;
+          points: Json;
+          profil_id: string;
+          symbole: string;
+        };
+        Insert: {
+          couleur?: string;
+          cree_le?: string;
+          id?: string;
+          intervalle?: string | null;
+          libelle?: string | null;
+          maj_le?: string;
+          outil: string;
+          points: Json;
+          profil_id: string;
+          symbole: string;
+        };
+        Update: {
+          couleur?: string;
+          cree_le?: string;
+          id?: string;
+          intervalle?: string | null;
+          libelle?: string | null;
+          maj_le?: string;
+          outil?: string;
+          points?: Json;
+          profil_id?: string;
+          symbole?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "annotations_graphique_profil_id_fkey";
+            columns: ["profil_id"];
+            isOneToOne: false;
+            referencedRelation: "profils";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       appels_llm: {
         Row: {
           agent_id: string | null;
