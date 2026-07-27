@@ -924,6 +924,22 @@ Le graphique, lui, passe de 55 % à 38 % de la hauteur d'écran hors cockpit :
 une vitrine de plus de la moitié de l'écran repoussait le journal des
 placements et le fil hors de vue.
 
+### Une grille étire ses colonnes, et le graphique suivait
+
+Réduire le pourcentage n'a rien changé, parce que la hauteur ne venait pas de
+là. Par défaut, `align-items` vaut `stretch` sur une grille : chaque colonne
+prend la hauteur de la plus haute. Le fil des spécialistes grandit à chaque
+message ; la colonne centrale s'étirait pour le suivre, et `flex-[3]` donnait
+au graphique les trois cinquièmes de cette hauteur. Un cycle bavard produisait
+donc un graphique haut de mille pixels — la seule pane visible étant celle du
+volume, les chandeliers écrasés à néant.
+
+Deux corrections, indissociables : `items-start` sur la grille, et une hauteur
+propre au graphique (`38vh`, plancher 18 rem, plafond 30 rem) au lieu d'une
+part de sa colonne. En cockpit — écran large et haut — l'étirement redevient
+souhaitable : il est réactivé par `.cockpit-etirer`, et les parts `3/2` par
+`.cockpit-part-3` et `.cockpit-part-2`, qui ne font rien hors de ce mode.
+
 ### L'ordre d'empilement change avec la largeur
 
 Empilé, le graphique et le poste de commande des agents passent devant le
