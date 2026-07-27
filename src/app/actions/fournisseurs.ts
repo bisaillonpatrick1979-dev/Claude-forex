@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import {
   enregistrerCle,
-  lireCle,
+  lireCleTolerante,
   supprimerCle,
   variablesReconnuesFournisseur,
 } from '@/lib/marche/cles';
@@ -106,11 +106,13 @@ export async function basculerFournisseur(
 
   const implementation = adaptateur(code);
   if (actif && implementation?.capacites().necessiteCle) {
-    const client = clientAdminOptionnel();
-    if (!client) return { ok: false, message: CONFIG_MANQUANTE };
-    const cle = await lireCle(client, profilId, code);
+    const cle = await lireCleTolerante(clientAdminOptionnel(), profilId, code);
     if (!cle) {
-      return { ok: false, message: 'Ce fournisseur exige une clé API : enregistre-la d’abord.' };
+      const variables = variablesReconnuesFournisseur(code);
+      return {
+        ok: false,
+        message: `Ce fournisseur exige une clé API : enregistrez-la, ou posez ${variables[0] ?? 'la variable correspondante'} dans l’environnement du serveur.`,
+      };
     }
   }
 
@@ -198,11 +200,23 @@ export async function testerFournisseur(code: string): Promise<ResultatFournisse
   }
 
   const client = clientAdminOptionnel();
+  // Le repli sur l'environnement ne dépend pas du client à privilèges : une clé
+  // posée dans les variables de l'hébergeur doit être trouvée même quand
+  // SUPABASE_SERVICE_ROLE_KEY manque.
   const cle = implementation.capacites().necessiteCle
-    ? client
-      ? ((await lireCle(client, profilId, code)) ?? undefined)
-      : undefined
+    ? ((await lireCleTolerante(client, profilId, code)) ?? undefined)
     : undefined;
+
+  if (implementation.capacites().necessiteCle && !cle) {
+    const variables = variablesReconnuesFournisseur(code);
+    return {
+      ok: false,
+      message:
+        'Aucune clé trouvée — ni enregistrée dans l’application, ni dans l’environnement du serveur' +
+        (variables.length > 0 ? ` (${variables.join(' ou ')}).` : '.') +
+        ' Si vous venez de l’ajouter chez l’hébergeur, vérifiez qu’elle couvre bien l’environnement « Production » et redéployez : les variables ne sont lues qu’au démarrage.',
+    };
+  }
 
   const controleur = new AbortController();
   const minuterie = setTimeout(() => controleur.abort(), 10_000);

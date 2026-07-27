@@ -51,6 +51,29 @@ export function cleFournisseurDepuisEnvironnement(service: string): string | nul
   return null;
 }
 
+/**
+ * Variante tolérante à l'absence de client à privilèges.
+ *
+ * `clientAdminOptionnel()` rend `null` quand SUPABASE_SERVICE_ROLE_KEY manque.
+ * Les appelants écrivaient alors `client ? await lireCle(...) : undefined`, ce
+ * qui court-circuitait aussi le repli sur l'environnement — une clé posée dans
+ * les variables de l'hébergeur restait invisible, et le test annonçait
+ * « aucune clé enregistrée » alors qu'il y en avait une.
+ *
+ * La lecture en base est facultative, le repli ne l'est pas.
+ */
+export async function lireCleTolerante(
+  client: Client | null,
+  profilId: string,
+  service: string,
+): Promise<string | null> {
+  if (client) {
+    const enBase = await lireCle(client, profilId, service);
+    if (enBase) return enBase;
+  }
+  return cleFournisseurDepuisEnvironnement(service);
+}
+
 export async function lireCle(
   client: Client,
   profilId: string,
