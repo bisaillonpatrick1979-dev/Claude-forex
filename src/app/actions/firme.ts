@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { estHorizon } from '@/lib/agents/horizons';
+
 import { exigerModeAutorise, type ModeOperation } from '@/lib/config/drapeaux';
 import { clientServeur } from '@/lib/supabase/serveur';
 
@@ -47,6 +49,37 @@ export async function changerMode(mode: string): Promise<ResultatAction> {
   if (error) {
     return { ok: false, message: error.message };
   }
+
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+/**
+ * Change l'horizon pratiqué par la firme.
+ *
+ * Contrairement au mode d'opération, aucune barrière en base : passer du swing
+ * au scalping n'expose pas d'argent réel, ça change seulement les consignes
+ * remises aux agents et les playbooks qu'on leur sert. Le contrôle qui compte
+ * est ailleurs — c'est celui des coûts, qui refuse un horizon là où les frais
+ * mangent le mouvement visé.
+ */
+export async function changerHorizon(horizon: string): Promise<ResultatAction> {
+  if (!estHorizon(horizon)) {
+    return { ok: false, message: 'Horizon inconnu.' };
+  }
+
+  const supabase = await clientServeur();
+  const { data: session } = await supabase.auth.getClaims();
+  const profilId = session?.claims?.sub;
+  if (typeof profilId !== 'string') {
+    return { ok: false, message: 'Session expirée.' };
+  }
+
+  const { error } = await supabase
+    .from('profils')
+    .update({ horizon_trading: horizon })
+    .eq('id', profilId);
+  if (error) return { ok: false, message: error.message };
 
   revalidatePath('/', 'layout');
   return { ok: true };

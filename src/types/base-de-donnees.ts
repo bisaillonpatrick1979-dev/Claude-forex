@@ -1304,6 +1304,7 @@ export type Database = {
         Row: {
           courriel: string;
           cree_le: string;
+          horizon_trading: Database["public"]["Enums"]["horizon_trading"];
           id: string;
           maj_le: string;
           mode_operation: Database["public"]["Enums"]["mode_operation"];
@@ -1314,6 +1315,7 @@ export type Database = {
         Insert: {
           courriel: string;
           cree_le?: string;
+          horizon_trading?: Database["public"]["Enums"]["horizon_trading"];
           id: string;
           maj_le?: string;
           mode_operation?: Database["public"]["Enums"]["mode_operation"];
@@ -1324,6 +1326,7 @@ export type Database = {
         Update: {
           courriel?: string;
           cree_le?: string;
+          horizon_trading?: Database["public"]["Enums"]["horizon_trading"];
           id?: string;
           maj_le?: string;
           mode_operation?: Database["public"]["Enums"]["mode_operation"];
@@ -1578,6 +1581,7 @@ export type Database = {
           famille: string;
           gestion_taille: string;
           horizons: Database["public"]["Enums"]["intervalle"][];
+          horizons_trading: Database["public"]["Enums"]["horizon_trading"][];
           id: string;
           maj_le: string;
           methode_embedding: string | null;
@@ -1598,6 +1602,7 @@ export type Database = {
           famille: string;
           gestion_taille: string;
           horizons?: Database["public"]["Enums"]["intervalle"][];
+          horizons_trading?: Database["public"]["Enums"]["horizon_trading"][];
           id?: string;
           maj_le?: string;
           methode_embedding?: string | null;
@@ -1618,6 +1623,7 @@ export type Database = {
           famille?: string;
           gestion_taille?: string;
           horizons?: Database["public"]["Enums"]["intervalle"][];
+          horizons_trading?: Database["public"]["Enums"]["horizon_trading"][];
           id?: string;
           maj_le?: string;
           methode_embedding?: string | null;
@@ -1935,6 +1941,7 @@ export type Database = {
         | "mock"
         | "deepseek"
         | "mistral";
+      horizon_trading: "SCALPING" | "INTRADAY" | "SWING" | "POSITION";
       intervalle: "M1" | "M5" | "M15" | "M30" | "H1" | "H4" | "D1" | "W1";
       mode_operation:
         | "PAPIER_AUTONOME"
@@ -2145,6 +2152,7 @@ export const Constants = {
         "deepseek",
         "mistral",
       ],
+      horizon_trading: ["SCALPING", "INTRADAY", "SWING", "POSITION"],
       intervalle: ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"],
       mode_operation: [
         "PAPIER_AUTONOME",

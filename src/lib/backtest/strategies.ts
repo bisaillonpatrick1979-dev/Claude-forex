@@ -1,3 +1,4 @@
+import { profilHorizon, type Horizon } from '@/lib/agents/horizons';
 import { clotures, derniereValeur, moyenneMobileSimple, rsi } from '@/lib/marche/indicateurs';
 
 import type { Decideur, VueDecision } from './moteur';
@@ -59,8 +60,23 @@ export const STRATEGIES: readonly DescriptionStrategie[] = [
 /** Risque par position, en fraction de l'équité. Volontairement modeste : on
  *  mesure un avantage de règle, pas un talent de dimensionnement. */
 const RISQUE_PAR_TRADE = 0.01;
-const MULTIPLE_STOP_ATR = 2;
-const MULTIPLE_CIBLE_ATR = 3;
+
+/**
+ * Horizon appliqué au dimensionnement.
+ *
+ * Le même signal ne se joue pas pareil selon l'horizon : le stop et la cible
+ * viennent du profil, pas de constantes maison. C'est ce qui permet de poser la
+ * question qui compte — « cette famille de stratégie survit-elle aux frais en
+ * scalping ? » — plutôt que de mesurer une seule variante arbitraire.
+ *
+ * Un module tourne à horizon fixe pendant tout le backtest ; le changer entre
+ * deux essais est le geste de comparaison qu'on veut rendre possible.
+ */
+let horizonCourant: Horizon = 'INTRADAY';
+
+export function fixerHorizonStrategies(horizon: Horizon): void {
+  horizonCourant = horizon;
+}
 
 const suiviTendance: Decideur = (vue) => {
   const prix = clotures(vue.bougies);
@@ -126,7 +142,8 @@ function ordre(vue: VueDecision, sens: 'ACHAT' | 'VENTE') {
   const valeurAtr = vue.atr;
   if (valeurAtr === null || valeurAtr <= 0) return {};
 
-  const distanceStop = valeurAtr * MULTIPLE_STOP_ATR;
+  const profil = profilHorizon(horizonCourant);
+  const distanceStop = valeurAtr * profil.multipleStopAtr;
   const valeurPoint = vue.instrument.tailleContrat;
   const risque = vue.portefeuille.equite * RISQUE_PAR_TRADE;
   const quantite = risque / (distanceStop * valeurPoint);
@@ -144,8 +161,8 @@ function ordre(vue: VueDecision, sens: 'ACHAT' | 'VENTE') {
         stopLoss: sens === 'ACHAT' ? prix - distanceStop : prix + distanceStop,
         takeProfit:
           sens === 'ACHAT'
-            ? prix + valeurAtr * MULTIPLE_CIBLE_ATR
-            : prix - valeurAtr * MULTIPLE_CIBLE_ATR,
+            ? prix + valeurAtr * profil.multipleCibleAtr
+            : prix - valeurAtr * profil.multipleCibleAtr,
       },
     ],
   };

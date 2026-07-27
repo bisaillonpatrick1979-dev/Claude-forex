@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 
 import { importerPourBacktest, lancerBacktest } from '@/app/actions/backtest';
+import { HORIZONS, PROFILS_HORIZON, type Horizon } from '@/lib/agents/horizons';
 import { STRATEGIES } from '@/lib/backtest/strategies';
 import { Panneau } from '@/composants/ui/panneau';
 
@@ -14,7 +15,7 @@ import { Panneau } from '@/composants/ui/panneau';
  * requête réseau à chaque essai de paramètre.
  */
 
-const INTERVALLES = ['D1', 'H4', 'H1', 'M30', 'M15'] as const;
+const INTERVALLES = ['D1', 'H4', 'H1', 'M30', 'M15', 'M5', 'M1'] as const;
 
 const CLASSE_CHAMP =
   'w-full rounded border border-bordure bg-fond px-2 py-1.5 text-sm text-texte outline-none focus:border-accent';
@@ -41,6 +42,7 @@ export function ConsoleBacktest({
   const [intervalle, setIntervalle] = useState<string>('D1');
   const [strategie, setStrategie] = useState<string>(STRATEGIES[0]!.code);
   const [capital, setCapital] = useState(100_000);
+  const [horizon, setHorizon] = useState<Horizon>('INTRADAY');
   const [annees, setAnnees] = useState(15);
   const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null);
   const [enCours, demarrer] = useTransition();
@@ -89,6 +91,27 @@ export function ConsoleBacktest({
           </select>
         </Champ>
 
+        <Champ etiquette="Horizon">
+          <select
+            className={CLASSE_CHAMP}
+            value={horizon}
+            onChange={(e) => {
+              const choisi = e.target.value as Horizon;
+              setHorizon(choisi);
+              // L'intervalle suit l'horizon : mesurer du scalping sur des
+              // bougies quotidiennes ne mesure rien. On peut encore le changer
+              // ensuite, mais le défaut doit être cohérent.
+              setIntervalle(PROFILS_HORIZON[choisi].intervalleDecision);
+            }}
+          >
+            {HORIZONS.map((code) => (
+              <option key={code} value={code}>
+                {PROFILS_HORIZON[code].nom}
+              </option>
+            ))}
+          </select>
+        </Champ>
+
         <Champ etiquette="Capital de départ">
           <input
             type="number"
@@ -101,9 +124,14 @@ export function ConsoleBacktest({
         </Champ>
       </div>
 
-      <p className="mt-3 text-xs leading-relaxed text-texte-attenue">
-        {STRATEGIES.find((option) => option.code === strategie)?.resume}
-      </p>
+      <div className="mt-3 flex flex-col gap-1 text-xs leading-relaxed text-texte-attenue">
+        <p>{STRATEGIES.find((option) => option.code === strategie)?.resume}</p>
+        <p>
+          <span className="text-texte">{PROFILS_HORIZON[horizon].nom}</span> —{' '}
+          {PROFILS_HORIZON[horizon].resume} Stop à {PROFILS_HORIZON[horizon].multipleStopAtr} ATR,
+          cible à {PROFILS_HORIZON[horizon].multipleCibleAtr} ATR.
+        </p>
+      </div>
 
       <div className="mt-3 rounded border border-bordure/60 px-3 py-2 text-xs">
         {dispo ? (
@@ -154,7 +182,7 @@ export function ConsoleBacktest({
           className={CLASSE_BOUTON}
           onClick={() =>
             demarrer(async () => {
-              const resultat = await lancerBacktest(symbole, intervalle, strategie, capital);
+              const resultat = await lancerBacktest(symbole, intervalle, strategie, capital, horizon);
               setMessage({ ok: resultat.ok, texte: resultat.message });
             })
           }

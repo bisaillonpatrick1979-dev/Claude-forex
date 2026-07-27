@@ -1,3 +1,4 @@
+import type { Horizon } from '@/lib/agents/horizons';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { calculerEmbedding, versLitteral, type MethodeEmbedding } from '@/lib/ia/embeddings';
@@ -104,6 +105,7 @@ export async function recupererStrategies(
   requete: string,
   famille: string | null,
   limite = 2,
+  horizon: Horizon | null = null,
 ): Promise<readonly ExtraitStrategie[]> {
   try {
     const { vecteur, methode } = await calculerEmbedding(client, profilId, requete);
@@ -115,6 +117,7 @@ export async function recupererStrategies(
       // L'orchestrateur parle avec la clé de service : auth.uid() y est NULL,
       // il faut donc nommer le profil explicitement.
       p_profil_id: profilId,
+      p_horizon: horizon ?? undefined,
     });
 
     return (data ?? []).map((ligne) => ({

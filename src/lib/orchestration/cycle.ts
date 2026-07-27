@@ -189,7 +189,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
   }
 
   const [{ data: profil }, agents, parametres, { data: etatRejeu }] = await Promise.all([
-    client.from('profils').select('mode_operation').eq('id', profilId).maybeSingle(),
+    client.from('profils').select('mode_operation, horizon_trading').eq('id', profilId).maybeSingle(),
     chargerAgents(client, profilId),
     lireParametresRisque(client, profilId),
     client
@@ -205,6 +205,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
   if (agents.length === 0) return echec('Aucun agent actif : le kill switch est peut-être enclenché.');
 
   const mode = profil.mode_operation;
+  const horizon = profil.horizon_trading;
 
   const instrumentCharge = await chargerInstrument(client, symbole);
   if (!instrumentCharge) return echec(`Instrument ${symbole} inconnu.`);
@@ -332,11 +333,12 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
 
   const [lecons, strategiesGenerales] = await Promise.all([
     recupererLecons(client, profilId, requeteMemoire, instrumentCharge.symboleId, 3),
-    recupererStrategies(client, profilId, requeteMemoire, null, 2),
+    recupererStrategies(client, profilId, requeteMemoire, null, 2, horizon),
   ]);
 
   const contexteCommun = {
     modeOperation: mode,
+    horizon,
     lecons: lecons.map((lecon) => lecon.rendu),
   };
 
@@ -442,7 +444,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
         [messageMarche],
         null,
         agent.familleStrategie
-          ? (await recupererStrategies(client, profilId, requeteMemoire, agent.familleStrategie, 2)).map(
+          ? (await recupererStrategies(client, profilId, requeteMemoire, agent.familleStrategie, 2, horizon)).map(
               (extrait) => extrait.rendu,
             )
           : strategiesGenerales.map((extrait) => extrait.rendu),

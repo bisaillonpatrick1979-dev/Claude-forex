@@ -6,7 +6,13 @@ import { z } from 'zod';
 import { calculerComparateurs, verdict } from '@/lib/backtest/comparateurs';
 import { calculerMetriques } from '@/lib/backtest/metriques';
 import { executerBacktest } from '@/lib/backtest/moteur';
-import { STRATEGIES, decideurStrategie, type CodeStrategie } from '@/lib/backtest/strategies';
+import {
+  STRATEGIES,
+  decideurStrategie,
+  fixerHorizonStrategies,
+  type CodeStrategie,
+} from '@/lib/backtest/strategies';
+import { estHorizon } from '@/lib/agents/horizons';
 import { chargerInstrument } from '@/lib/execution/persistance';
 import { importerHistorique } from '@/lib/marche/import-historique';
 import { estIntervalle } from '@/lib/marche/intervalles';
@@ -40,6 +46,7 @@ export interface ResultatLancement {
 const schema = z.object({
   symbole: z.string().min(1).max(20),
   intervalle: z.string().refine(estIntervalle, 'Intervalle inconnu.'),
+  horizon: z.string().refine(estHorizon, 'Horizon inconnu.'),
   strategie: z
     .string()
     .refine(
@@ -55,6 +62,7 @@ export async function lancerBacktest(
   intervalle: string,
   strategie: string,
   capitalInitial: number,
+  horizon: string,
 ): Promise<ResultatLancement> {
   const profilId = await profilAuthentifie();
   if (!profilId) return { ok: false, message: 'Session expirée.' };
@@ -63,7 +71,7 @@ export async function lancerBacktest(
     return { ok: false, message: 'Trop de backtests lancés, réessaie dans une minute.' };
   }
 
-  const analyse = schema.safeParse({ symbole, intervalle, strategie, capitalInitial });
+  const analyse = schema.safeParse({ symbole, intervalle, strategie, capitalInitial, horizon });
   if (!analyse.success) {
     return { ok: false, message: analyse.error.issues[0]?.message ?? 'Entrée invalide.' };
   }
@@ -114,6 +122,10 @@ export async function lancerBacktest(
     capitalInitial: analyse.data.capitalInitial,
   };
 
+  // Le stop et la cible viennent de l'horizon : c'est lui qui décide comment le
+  // même signal se joue, et donc si les frais laissent quelque chose.
+  fixerHorizonStrategies(analyse.data.horizon);
+
   const resultat = executerBacktest({
     ...base,
     decideur: decideurStrategie(analyse.data.strategie),
@@ -137,6 +149,7 @@ export async function lancerBacktest(
       capital_initial: analyse.data.capitalInitial,
       configuration: {
         strategie: analyse.data.strategie,
+        horizon: analyse.data.horizon,
         bougies: chandeliers.length,
         qualite: { couverture: qualite.couverture, anomalies: qualite.anomalies.length },
       },
