@@ -14,6 +14,43 @@ type Client = SupabaseClient<Database>;
  * la valeur en clair n'est jamais renvoyée à un composant.
  */
 
+/**
+ * Noms de variables d'environnement reconnus par service.
+ *
+ * Le chiffrement en base est la voie recommandée, mais il exige
+ * `CLE_CHIFFREMENT` côté serveur. Tant qu'elle manque, l'écran refuse
+ * d'enregistrer quoi que ce soit — à juste titre : stocker une clé en clair
+ * serait pire. Le résultat est cependant une impasse pour qui n'a pas de
+ * terminal sous la main pour générer trente-deux octets aléatoires.
+ *
+ * Poser la clé dans les variables d'environnement de l'hébergeur lève
+ * l'impasse : la valeur ne transite jamais par notre base, donc la question du
+ * chiffrement au repos ne se pose pas — c'est l'hébergeur qui la protège.
+ *
+ * Mêmes conventions de nommage que pour les modèles de langage, et même ordre
+ * de priorité : la base d'abord, l'environnement en repli. Une clé saisie dans
+ * l'application est un choix explicite ; elle doit primer sur une variable
+ * posée une fois puis oubliée.
+ */
+const VARIABLES_PAR_SERVICE: Readonly<Record<string, readonly string[]>> = {
+  twelvedata: ['TWELVEDATA_API_KEY', 'CLE_API_TWELVEDATA'],
+  finnhub: ['FINNHUB_API_KEY', 'CLE_API_FINNHUB'],
+  alphavantage: ['ALPHAVANTAGE_API_KEY', 'CLE_API_ALPHAVANTAGE'],
+  alpaca: ['ALPACA_API_KEY', 'CLE_API_ALPACA'],
+};
+
+export function variablesReconnuesFournisseur(service: string): readonly string[] {
+  return VARIABLES_PAR_SERVICE[service] ?? [];
+}
+
+export function cleFournisseurDepuisEnvironnement(service: string): string | null {
+  for (const nom of variablesReconnuesFournisseur(service)) {
+    const valeur = process.env[nom]?.trim();
+    if (valeur) return valeur;
+  }
+  return null;
+}
+
 export async function lireCle(
   client: Client,
   profilId: string,
@@ -26,16 +63,17 @@ export async function lireCle(
     .eq('service', service)
     .maybeSingle();
 
-  if (!data) return null;
-
-  try {
-    return dechiffrer(data.valeur_chiffree);
-  } catch {
-    // Clé illisible (CLE_CHIFFREMENT changée, valeur corrompue) : on traite
-    // comme absente plutôt que de propager une exception au routeur, qui
-    // basculera proprement sur le fournisseur suivant.
-    return null;
+  if (data) {
+    try {
+      return dechiffrer(data.valeur_chiffree);
+    } catch {
+      // Clé illisible (CLE_CHIFFREMENT changée, valeur corrompue) : on tombe
+      // sur l'environnement plutôt que de propager une exception au routeur,
+      // qui basculerait sur le fournisseur suivant sans dire pourquoi.
+    }
   }
+
+  return cleFournisseurDepuisEnvironnement(service);
 }
 
 export async function enregistrerCle(

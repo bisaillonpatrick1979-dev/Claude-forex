@@ -3,7 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-import { enregistrerCle, lireCle, supprimerCle } from '@/lib/marche/cles';
+import {
+  enregistrerCle,
+  lireCle,
+  supprimerCle,
+  variablesReconnuesFournisseur,
+} from '@/lib/marche/cles';
 import { fournisseur as adaptateur } from '@/lib/marche/fournisseurs';
 import { estCodeFournisseur, type ClasseActif } from '@/lib/marche/types';
 import { chiffrementConfigure } from '@/lib/securite/chiffrement';
@@ -45,10 +50,14 @@ export async function enregistrerCleFournisseur(
   }
 
   if (!chiffrementConfigure()) {
+    const variables = variablesReconnuesFournisseur(analyse.data.code);
     return {
       ok: false,
       message:
-        'CLE_CHIFFREMENT absente ou invalide côté serveur : la clé ne serait pas chiffrée au repos.',
+        'CLE_CHIFFREMENT absente ou invalide côté serveur : rien n’a été enregistré, la clé serait stockée en clair. ' +
+        (variables.length > 0
+          ? `Deux solutions : ajouter CLE_CHIFFREMENT (32 octets en base64) aux variables d’environnement, ou y poser directement ${variables[0]} — dans ce cas la clé ne passe jamais par notre base et l’hébergeur la protège.`
+          : 'Ajoutez CLE_CHIFFREMENT (32 octets en base64) aux variables d’environnement, puis redéployez.'),
     };
   }
 

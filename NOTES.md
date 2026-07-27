@@ -1291,6 +1291,32 @@ curseur déjà avancé.
 
 ---
 
+## L'impasse du chiffrement, et sa porte de sortie
+
+L'écran des fournisseurs refusait d'enregistrer une clé tant que
+`CLE_CHIFFREMENT` manquait — à juste titre : stocker une clé en clair serait
+pire que refuser. Mais le refus laissait dans une impasse quiconque n'a pas de
+terminal sous la main pour générer trente-deux octets aléatoires, ce qui est le
+cas d'un utilisateur sur tablette.
+
+Les clés de fournisseurs de données acceptent désormais le même repli que
+celles des modèles : `TWELVEDATA_API_KEY`, `FINNHUB_API_KEY`,
+`ALPHAVANTAGE_API_KEY`, `ALPACA_API_KEY`. Posée dans l'environnement de
+l'hébergeur, la valeur ne transite jamais par notre base — la question du
+chiffrement au repos ne se pose donc pas, c'est l'hébergeur qui protège.
+
+Même ordre de priorité que pour les modèles : la base d'abord, l'environnement
+en repli. Une clé saisie dans l'application est un choix explicite ; elle doit
+primer sur une variable posée une fois puis oubliée.
+
+Le message d'erreur nomme maintenant les deux issues au lieu de constater le
+problème et de s'arrêter là. L'écran signale « clé serveur » quand
+l'environnement fournit, sinon il rappelle le nom de la variable attendue :
+« clé absente » alors qu'une clé fonctionne ferait chercher un problème
+inexistant.
+
+---
+
 ## Limites annoncées franchement (phase 4b)
 
 ### Quinze ans d'historique : oui en simulé, non en données réelles

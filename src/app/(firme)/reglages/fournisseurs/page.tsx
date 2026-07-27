@@ -1,6 +1,10 @@
 import { EntetePage } from '@/composants/ui/entete-page';
 import { Panneau } from '@/composants/ui/panneau';
-import { listerClesPubliques } from '@/lib/marche/cles';
+import {
+  cleFournisseurDepuisEnvironnement,
+  listerClesPubliques,
+  variablesReconnuesFournisseur,
+} from '@/lib/marche/cles';
 import { fournisseur as adaptateur } from '@/lib/marche/fournisseurs';
 import { listerSymboles } from '@/lib/marche/symboles';
 import { estCodeFournisseur } from '@/lib/marche/types';
@@ -47,6 +51,11 @@ export default async function PageFournisseurs() {
       necessiteCle: implementation?.capacites().necessiteCle ?? true,
       intervalles: implementation ? [...implementation.capacites().intervalles] : [],
       indiceVisuel: cle?.indiceVisuel ?? null,
+      // Une clé posée dans l'environnement de l'hébergeur fonctionne sans
+      // passer par notre base : l'écran doit le dire, sinon « clé absente »
+      // ferait chercher un problème inexistant.
+      cleEnvironnement: cleFournisseurDepuisEnvironnement(ligne.code) !== null,
+      variablesEnvironnement: variablesReconnuesFournisseur(ligne.code),
       quotaLimite: ligne.quota_limite,
       quotaUtilise: ligne.quota_utilise,
       fenetre: ligne.fenetre_quota,
