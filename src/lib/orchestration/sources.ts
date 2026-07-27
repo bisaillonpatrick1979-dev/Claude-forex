@@ -1,3 +1,5 @@
+import { dureeSecondes } from '@/lib/marche/intervalles';
+import type { Intervalle } from '@/lib/marche/types';
 import type { Database } from '@/types/base-de-donnees';
 
 type RoleAgent = Database['public']['Enums']['role_agent'];
@@ -86,8 +88,80 @@ const PAR_ROLE: Partial<Record<RoleAgent, readonly string[]>> = {
   ANALYSTE_SENTIMENT: DOMAINES_SENTIMENT,
 };
 
-export function rechercheAutorisee(role: RoleAgent): boolean {
+/**
+ * Régime temporel du cycle.
+ *
+ * ═══ Barrière anti-look-ahead, appliquée au web ═══
+ *
+ * Le moteur d'exécution interdit déjà à un ordre de se remplir sur une bougie
+ * antérieure à sa décision. La même exigence vaut pour l'information : un
+ * analyste macro qui lit les nouvelles d'aujourd'hui pendant qu'il étudie une
+ * bougie de 2015 connaît la suite de l'histoire. Le backtest cesserait alors
+ * de mesurer quoi que ce soit — il mesurerait la capacité du modèle à se
+ * souvenir de ce qui s'est passé.
+ *
+ * Trois situations font basculer un cycle en régime historique :
+ *
+ *  - un rejeu est en cours : le portefeuille vit dans le passé, point ;
+ *  - l'instantané est périmé : les données servies sortent du cache hors TTL,
+ *    donc elles ne décrivent plus le marché courant ;
+ *  - la dernière bougie a trop de retard sur l'heure réelle. Le seuil est de
+ *    trois intervalles : une bougie en cours et un retard de fournisseur
+ *    restent du temps réel, une série arrêtée depuis une heure ne l'est plus.
+ *
+ * En régime historique, la recherche web est coupée. Les analystes travaillent
+ * alors sur le seul instantané — ce qui est exactement ce qu'on veut mesurer.
+ */
+export type RegimeCycle = 'TEMPS_REEL' | 'HISTORIQUE';
+
+export interface ConditionsTemporelles {
+  readonly rejeuActif: boolean;
+  readonly instantanePerime: boolean;
+  readonly horodatageDerniereBougie: number;
+  readonly intervalle: Intervalle;
+  readonly maintenant: number;
+}
+
+/** Nombre d'intervalles de retard tolérés avant de considérer que la série
+ *  ne décrit plus le marché courant. */
+const INTERVALLES_DE_RETARD_TOLERES = 3;
+
+export function regimeCycle(conditions: ConditionsTemporelles): RegimeCycle {
+  if (conditions.rejeuActif) return 'HISTORIQUE';
+  if (conditions.instantanePerime) return 'HISTORIQUE';
+
+  const retard = conditions.maintenant - conditions.horodatageDerniereBougie;
+  const tolerance = dureeSecondes(conditions.intervalle) * INTERVALLES_DE_RETARD_TOLERES;
+
+  return retard > tolerance ? 'HISTORIQUE' : 'TEMPS_REEL';
+}
+
+/**
+ * Le rôle a-t-il le droit de chercher sur le web, dans ce régime ?
+ *
+ * Le régime prime sur le rôle : un analyste macro reste privé de web en
+ * historique, même si c'est précisément son métier. Mieux vaut une analyse
+ * macro pauvre qu'un backtest faussé.
+ */
+export function rechercheAutorisee(role: RoleAgent, regime: RegimeCycle): boolean {
+  if (regime === 'HISTORIQUE') return false;
   return PAR_ROLE[role] !== undefined;
+}
+
+/** Explication affichée dans le fil quand le web est coupé. Le silence
+ *  laisserait croire que les agents ont regardé les nouvelles. */
+export function raisonRegimeHistorique(conditions: ConditionsTemporelles): string | null {
+  if (conditions.rejeuActif) {
+    return 'Rejeu en cours : la recherche web est coupée. Lire les nouvelles d’aujourd’hui pour décider d’une bougie passée reviendrait à connaître la suite.';
+  }
+  if (conditions.instantanePerime) {
+    return 'Données servies depuis le cache hors délai : la recherche web est coupée, elle décrirait un marché plus récent que les prix analysés.';
+  }
+  const retard = conditions.maintenant - conditions.horodatageDerniereBougie;
+  if (retard > dureeSecondes(conditions.intervalle) * INTERVALLES_DE_RETARD_TOLERES) {
+    return `Dernière bougie vieille de ${Math.round(retard / 60)} minutes : la recherche web est coupée tant que la série n’a pas rattrapé le marché.`;
+  }
+  return null;
 }
 
 export function domainesPour(role: RoleAgent): readonly string[] {

@@ -987,6 +987,25 @@ déclenchement par jour ; une veille réellement continue suppose un forfait
 payant ou un ordonnanceur externe. C'est une décision de dépense, elle
 appartient au propriétaire.
 
+### Le web est coupé dès que le cycle quitte le temps réel
+
+Barrière anti-look-ahead, appliquée à l'information et non plus seulement aux
+prix. Le moteur interdit déjà à un ordre de se remplir sur une bougie
+antérieure à sa décision ; sans l'équivalent côté web, un analyste macro
+lirait les nouvelles d'aujourd'hui en étudiant une bougie de 2015. Le backtest
+cesserait de mesurer une méthode pour mesurer une mémoire — et le résultat
+serait flatteur, ce qui est le pire des cas.
+
+`regimeCycle()` bascule en `HISTORIQUE` dans trois situations : un rejeu est en
+cours, l'instantané sort du cache hors délai, ou la dernière bougie a plus de
+trois intervalles de retard. Le seuil est relatif à l'intervalle : deux heures
+de retard sont normales en H4 et anormales en M5.
+
+Le régime prime sur le rôle. Un analyste macro reste privé de web en
+historique, même si c'est précisément son métier : mieux vaut une analyse macro
+pauvre qu'un backtest faussé. La coupure est annoncée dans le fil — le silence
+laisserait croire que les agents ont consulté les nouvelles.
+
 ### Trois rôles seulement ont accès au web
 
 Macro, sentiment et fondamental : leur matière première est hors du graphique.
