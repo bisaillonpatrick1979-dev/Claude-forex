@@ -1,10 +1,14 @@
 import { redirect } from 'next/navigation';
 
+import { PanneauEnveloppe } from '@/composants/agents/panneau-enveloppe';
 import { Atelier } from '@/composants/trading/atelier';
 import type { OrdreAffiche, PositionAffichee } from '@/composants/trading/positions-ouvertes';
 import { EtatVide, Panneau } from '@/composants/ui/panneau';
 import { couleurPnl, formaterMonnaie, formaterPourcentage, versNombre } from '@/lib/format';
 import { listerSymboles } from '@/lib/marche/symboles';
+import { raisonIndisponibilite } from '@/lib/agents/enveloppe';
+import { chargerEnveloppe } from '@/lib/agents/enveloppe-serveur';
+import { clientAdminOptionnel } from '@/lib/supabase/admin';
 import { clientServeur } from '@/lib/supabase/serveur';
 
 export const metadata = { title: 'Salle des marchés — Trading Floor IA' };
@@ -19,11 +23,18 @@ export default async function PageSalleDesMarches() {
   const profilId = jetons?.claims?.sub;
   if (typeof profilId !== 'string') redirect('/connexion');
 
-  const [{ data: portefeuille }, symboles, { data: positions }, { data: ordres }] =
-    await Promise.all([
+  const [
+    { data: portefeuille },
+    symboles,
+    { data: positions },
+    { data: ordres },
+    { data: profil },
+    { data: agents },
+    { count: agentsAutonomes },
+  ] = await Promise.all([
       supabase
         .from('portefeuilles')
-        .select('nom, devise, capital_initial, solde, equite, marge_utilisee, sommet_equite, gele, raison_gel')
+        .select('nom, devise, capital_initial, solde, equite, marge_utilisee, sommet_equite, gele, raison_gel, capital_alloue_agents')
         .eq('profil_id', profilId)
         .limit(1)
         .maybeSingle(),
@@ -40,7 +51,26 @@ export default async function PageSalleDesMarches() {
         .eq('profil_id', profilId)
         .in('statut', ['EN_ATTENTE', 'PARTIELLEMENT_REMPLI'])
         .order('cree_le', { ascending: false }),
+      supabase.from('profils').select('mode_operation').eq('id', profilId).maybeSingle(),
+      supabase
+        .from('agents')
+        .select('id, nom, couleur')
+        .eq('profil_id', profilId)
+        .order('ordre_affichage'),
+      supabase
+        .from('permissions_agents')
+        .select('agent_id', { count: 'exact', head: true })
+        .eq('profil_id', profilId)
+        .eq('niveau', 'AUTONOME'),
     ]);
+
+  // L'enveloppe passe par le client à privilèges : elle agrège des positions
+  // fermées que RLS laisse lire, mais le calcul doit rester identique à celui
+  // qu'appliquent les barrières côté serveur — une seule implémentation.
+  const clientPrivilegie = clientAdminOptionnel();
+  const enveloppe = clientPrivilegie
+    ? await chargerEnveloppe(clientPrivilegie, profilId)
+    : null;
 
   const equite = versNombre(portefeuille?.equite);
   const capitalInitial = versNombre(portefeuille?.capital_initial);
@@ -107,12 +137,28 @@ export default async function PageSalleDesMarches() {
     </Panneau>
   );
 
-  const filSpecialistes = (
-    <Panneau titre="Fil des spécialistes" className="min-h-80 xl:min-h-0">
-      <EtatVide
-        message="Les agents débattront ici en direct, message par message."
-        phase="Orchestration et Realtime — phases 4 et 5"
-      />
+  const panneauAgents = (
+    <Panneau titre="Vos agents">
+      {enveloppe ? (
+        <PanneauEnveloppe
+          enveloppe={{
+            alloue: enveloppe.alloue,
+            profitsRealises: enveloppe.profitsRealises,
+            pertesRealisees: enveloppe.pertesRealisees,
+            latent: enveloppe.latent,
+            valeurCourante: enveloppe.valeurCourante,
+            netRealise: enveloppe.netRealise,
+            variationPct: enveloppe.variationPct,
+            margeEngagee: enveloppe.margeEngagee,
+          }}
+          devise={devise}
+          equiteCompte={equite}
+          modeOperation={profil?.mode_operation ?? 'PAPIER_VALIDATION'}
+          agentsAutonomes={agentsAutonomes ?? 0}
+        />
+      ) : (
+        <EtatVide message="SUPABASE_SERVICE_ROLE_KEY absente : l’enveloppe des agents ne peut pas être calculée." />
+      )}
     </Panneau>
   );
 
@@ -122,7 +168,14 @@ export default async function PageSalleDesMarches() {
       positions={positionsAffichees}
       ordres={ordresAffiches}
       panneauFirme={panneauFirme}
-      filSpecialistes={filSpecialistes}
+      panneauAgents={panneauAgents}
+      profilId={profilId}
+      agents={(agents ?? []).map((agent) => ({
+        id: agent.id,
+        nom: agent.nom,
+        couleur: agent.couleur,
+      }))}
+      blocageAgents={enveloppe ? raisonIndisponibilite(enveloppe) : null}
     />
   );
 }

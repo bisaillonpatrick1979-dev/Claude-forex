@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 
+import { FilSpecialistes, type AgentAffiche } from '@/composants/agents/fil-specialistes';
 import { ZoneGraphique, type SymboleOption } from '@/composants/graphique/zone-graphique';
 import type { MarqueurDecision } from '@/composants/graphique/types-graphique';
 import { Panneau } from '@/composants/ui/panneau';
@@ -28,14 +29,20 @@ export function Atelier({
   ordres,
   marqueurs = [],
   panneauFirme,
-  filSpecialistes,
+  panneauAgents,
+  profilId,
+  agents,
+  blocageAgents,
 }: {
   symboles: readonly SymboleOption[];
   positions: readonly PositionAffichee[];
   ordres: readonly OrdreAffiche[];
   marqueurs?: readonly MarqueurDecision[];
   panneauFirme: React.ReactNode;
-  filSpecialistes: React.ReactNode;
+  panneauAgents: React.ReactNode;
+  profilId: string;
+  agents: readonly AgentAffiche[];
+  blocageAgents: string | null;
 }) {
   const [symbole, setSymbole] = useState(symboles[0]?.code ?? 'EURUSD');
   const [intervalle, setIntervalle] = useState<Intervalle>('M5');
@@ -84,7 +91,19 @@ export function Atelier({
         />
       </section>
 
-      {filSpecialistes}
+      <div className="flex min-h-0 flex-col gap-3">
+        {panneauAgents}
+
+        <Panneau titre="Fil des spécialistes" className="min-h-80 flex-1 xl:min-h-0">
+          <FilSpecialistes
+            profilId={profilId}
+            symbole={symbole}
+            intervalle={intervalle}
+            agents={agents}
+            blocage={blocageAgents}
+          />
+        </Panneau>
+      </div>
     </div>
   );
 }
