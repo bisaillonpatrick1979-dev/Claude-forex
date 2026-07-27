@@ -5,12 +5,20 @@ import { EtatVide, Panneau } from '@/composants/ui/panneau';
 import { formaterNombre } from '@/lib/format';
 import { clientServeur } from '@/lib/supabase/serveur';
 
+import { Reinitialisation } from './reinitialisation';
+
 export const metadata = { title: 'Réglages — Trading Floor IA' };
 
 export default async function PageReglages() {
   const supabase = await clientServeur();
 
-  const [{ data: fournisseurs }, { data: risque }] = await Promise.all([
+  const [
+    { data: fournisseurs },
+    { data: risque },
+    { data: portefeuille },
+    { count: nombreLecons },
+    { count: nombreCycles },
+  ] = await Promise.all([
     supabase
       .from('fournisseurs_donnees')
       .select('id, code, nom, actif, quota_limite, quota_utilise, fenetre_quota, dernier_statut, derniere_erreur')
@@ -21,6 +29,13 @@ export default async function PageReglages() {
         'risque_max_par_trade_pct, risque_total_max_pct, positions_max, positions_correlees_max, perte_journaliere_max_pct, drawdown_max_pct, levier_max, fenetre_evenement_macro_minutes, stop_loss_obligatoire',
       )
       .maybeSingle(),
+    supabase
+      .from('portefeuilles')
+      .select('capital_initial, devise')
+      .limit(1)
+      .maybeSingle(),
+    supabase.from('lecons').select('id', { count: 'exact', head: true }),
+    supabase.from('cycles').select('id', { count: 'exact', head: true }),
   ]);
 
   return (
@@ -29,6 +44,15 @@ export default async function PageReglages() {
         titre="Réglages"
         description="Fournisseurs de données, clés API, modèles LLM et limites de risque."
       />
+
+      <Panneau titre="Capital et réinitialisation">
+        <Reinitialisation
+          capitalActuel={Number(portefeuille?.capital_initial ?? 0)}
+          devise={portefeuille?.devise ?? 'USD'}
+          nombreLecons={nombreLecons ?? 0}
+          nombreCycles={nombreCycles ?? 0}
+        />
+      </Panneau>
 
       <div className="grid gap-3 xl:grid-cols-2">
         <Panneau

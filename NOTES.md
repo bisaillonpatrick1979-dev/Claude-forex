@@ -1189,6 +1189,68 @@ retrouver les ordres passés à la main.
 
 ---
 
+## Décisions (réinitialisation et fournisseurs)
+
+### Trois intentions, trois actions séparées
+
+Changer un capital, repartir de zéro en gardant la mémoire des agents, et tout
+effacer sont trois choses différentes. Les réunir sous un même bouton ferait
+perdre des données à quelqu'un qui voulait seulement ajuster un montant.
+
+`ajusterCapital` **décale** le solde et l'équité au lieu de les remplacer. Le
+P&L réalisé se lit comme « solde − capital initial » : remplacer le solde
+effacerait tous les gains et pertes déjà encaissés en donnant l'illusion d'un
+compte neuf.
+
+`reinitialiser_firme` est une fonction SECURITY DEFINER qui lit `auth.uid()`.
+Elle n'accepte pas d'identifiant de profil en paramètre — ce serait exactement
+l'endroit où une erreur effacerait le compte d'un autre. L'action serveur passe
+donc par le client authentifié, jamais par la clé de service.
+
+Le sommet d'équité est remis au capital et non conservé : le garder ferait
+croire à un drawdown dès la première seconde et bloquerait les garde-fous sur
+un compte pourtant neuf. L'allocation aux agents est ramenée à
+`min(allocation, capital)` — confier 10 000 sur un compte réinitialisé à 5 000
+produirait une enveloppe imaginaire.
+
+Ce qui n'est jamais touché, quel que soit le choix : les clés API chiffrées,
+les agents et leurs mandats, leurs permissions, les playbooks, et le journal
+d'audit — immuable par trigger, donc il garde la trace de la réinitialisation
+elle-même.
+
+### La confirmation se tape, elle ne se coche pas
+
+Une case à cocher se coche sans lire. Retaper le montant exact suppose qu'on a
+compris ce qu'on fait. C'est la même exigence que celle prévue pour le futur
+mode réel, et elle vit dans l'interface : une action serveur qui redemanderait
+confirmation donnerait une fausse impression de sécurité, puisqu'elle est
+appelable directement.
+
+### Finnhub : ne déclarer que ce qui marche sans abonnement
+
+L'adaptateur ne revendique que les actions et la crypto. Le Forex et les
+chandeliers d'indices y sont réservés aux formules payantes : les déclarer
+ferait échouer un appel sur deux avant que le routeur ne bascule sur le
+fournisseur suivant, en consommant du quota pour rien.
+
+Son API rend les séries en colonnes parallèles (`t`, `o`, `h`, `l`, `c`, `v`).
+On s'arrête au plus court des tableaux : une réponse tronquée produirait sinon
+des `undefined` convertis en `NaN`, c'est-à-dire des prix inventés.
+
+### TradingView n'a pas d'API de données
+
+Leur bibliothèque de graphiques est un composant d'affichage : elle attend
+qu'on lui fournisse les données, elle n'en fournit pas. Il n'existe pas de clé
+API TradingView permettant de récupérer des chandeliers depuis une application
+tierce. Les intégrations qu'on voit passer sont soit des webhooks d'alerte
+sortants, soit du contournement de leurs conditions d'utilisation.
+
+Ce qui existe et fonctionne : Twelve Data, Yahoo Finance, Finnhub. Alpha
+Vantage et Alpaca restent déclarés sans implémentation, et l'écran le dit au
+lieu de laisser croire qu'une clé suffirait.
+
+---
+
 ## Limites annoncées franchement (phase 4b)
 
 ### Quinze ans d'historique : oui en simulé, non en données réelles
