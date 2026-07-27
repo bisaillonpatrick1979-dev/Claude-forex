@@ -216,6 +216,7 @@ export async function reflechirSurPositionsFermees(
           {
             mandat: reflexion.mandat,
             nomAgent: reflexion.nom,
+            role: reflexion.role,
             modeOperation: 'débrief',
             strategies: [],
             lecons: [],
