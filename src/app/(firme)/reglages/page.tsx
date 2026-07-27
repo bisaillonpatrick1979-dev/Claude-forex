@@ -7,7 +7,7 @@ import { tauxConversion } from '@/lib/execution/couts';
 import type { Instrument } from '@/lib/execution/types';
 
 import { ChoixHorizon, type ViabiliteAffichee } from './horizon';
-import { formaterNombre } from '@/lib/format';
+import { FormulaireLimites } from './limites';
 import { clientServeur } from '@/lib/supabase/serveur';
 
 import { Reinitialisation } from './reinitialisation';
@@ -45,7 +45,7 @@ export default async function PageReglages() {
 
   const { data: profil } = await supabase
     .from('profils')
-    .select('horizon_trading')
+    .select('horizon_trading, plafond_cout_quotidien_usd')
     .limit(1)
     .maybeSingle();
 
@@ -163,51 +163,40 @@ export default async function PageReglages() {
           </p>
         </Panneau>
 
-        <Panneau titre="Limites de risque">
+        <Panneau titre="Limites de risque et budget IA">
           {!risque ? (
             <EtatVide message="Aucun paramètre de risque pour ce profil." />
           ) : (
-            <dl className="grid gap-1.5 text-sm sm:grid-cols-2">
-              <Limite libelle="Risque par trade" valeur={`${formaterNombre(risque.risque_max_par_trade_pct, 2)} %`} />
-              <Limite libelle="Risque total" valeur={`${formaterNombre(risque.risque_total_max_pct, 2)} %`} />
-              <Limite libelle="Positions max" valeur={formaterNombre(risque.positions_max, 0)} />
-              <Limite
-                libelle="Part max d’une position"
-                valeur={`${formaterNombre(risque.part_position_max_pct, 0)} % du risque agrégé`}
-              />
-              <Limite
-                libelle="Part max d’un facteur"
-                valeur={`${formaterNombre(risque.part_facteur_max_pct, 0)} % du budget`}
-              />
-              <Limite libelle="Perte journalière" valeur={`${formaterNombre(risque.perte_journaliere_max_pct, 2)} %`} />
-              <Limite libelle="Drawdown max" valeur={`${formaterNombre(risque.drawdown_max_pct, 2)} %`} />
-              <Limite libelle="Levier max" valeur={`${formaterNombre(risque.levier_max, 0)}:1`} />
-              <Limite
-                libelle="Fenêtre macro"
-                valeur={`${formaterNombre(risque.fenetre_evenement_macro_minutes, 0)} min`}
-              />
-              <Limite
-                libelle="Stop-loss obligatoire"
-                valeur={risque.stop_loss_obligatoire ? 'oui' : 'non'}
-              />
-            </dl>
+            <FormulaireLimites
+              valeurs={{
+                risqueMaxParTradePct: Number(risque.risque_max_par_trade_pct),
+                risqueTotalMaxPct: Number(risque.risque_total_max_pct),
+                positionsMax: Number(risque.positions_max),
+                partPositionMaxPct: Number(risque.part_position_max_pct),
+                partFacteurMaxPct: Number(risque.part_facteur_max_pct),
+                perteJournaliereMaxPct: Number(risque.perte_journaliere_max_pct),
+                drawdownMaxPct: Number(risque.drawdown_max_pct),
+                levierMax: Number(risque.levier_max),
+                fenetreEvenementMacroMinutes: Number(risque.fenetre_evenement_macro_minutes),
+                plafondCoutQuotidienUsd: Number(profil?.plafond_cout_quotidien_usd ?? 0),
+              }}
+            />
           )}
-          <p className="mt-3 text-xs text-texte-attenue">
+          <p className="mt-3 text-xs leading-relaxed text-texte-attenue">
             Ces plafonds sont appliqués par le moteur de risque en TypeScript côté serveur, pas par
-            les prompts des agents. Édition en phase 3.
+            les prompts des agents : un agent ne peut pas argumenter pour les dépasser. Une
+            modification prend effet au prochain ordre évalué — elle ne redimensionne pas les
+            positions déjà ouvertes.
+            {risque && !risque.stop_loss_obligatoire ? (
+              <span className="text-alerte">
+                {' '}
+                Le stop-loss obligatoire est désactivé pour ce profil.
+              </span>
+            ) : null}
           </p>
         </Panneau>
       </div>
     </>
-  );
-}
-
-function Limite({ libelle, valeur }: { libelle: string; valeur: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 rounded border border-bordure/60 px-2.5 py-1.5">
-      <dt className="text-xs text-texte-attenue">{libelle}</dt>
-      <dd className="chiffre text-sm">{valeur}</dd>
-    </div>
   );
 }
 
