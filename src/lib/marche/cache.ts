@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/base-de-donnees';
 
 import { bougieFermee, ttlSecondes } from './intervalles';
-import type { Chandelier, CodeFournisseur, Intervalle } from './types';
+import { natureFournisseur, type Chandelier, type CodeFournisseur, type Intervalle } from './types';
 
 type Client = SupabaseClient<Database>;
 
@@ -47,7 +47,17 @@ export async function lireCache(
     return { chandeliers: [], frais: false, fournisseur: null, recupereLe: null };
   }
 
-  const chandeliers = data
+  // La bougie la plus récente donne la nature de la série ; celles d'une autre
+  // nature sont écartées. Une série tronquée fait redemander le fournisseur —
+  // très préférable à une série continue en apparence dont la moitié est
+  // inventée. Cas vécu : XAU/USD passait de 2 379 à 4 056 en une bougie, à la
+  // jointure exacte entre la simulation et les premières données réelles.
+  const nature = natureFournisseur(data[0]!.fournisseur_code as CodeFournisseur);
+  const homogenes = data.filter(
+    (ligne) => natureFournisseur(ligne.fournisseur_code as CodeFournisseur) === nature,
+  );
+
+  const chandeliers = homogenes
     .map((ligne) => ({
       horodatage: Math.floor(new Date(ligne.horodatage).getTime() / 1000),
       ouverture: Number(ligne.ouverture),
@@ -58,7 +68,7 @@ export async function lireCache(
     }))
     .sort((a, b) => a.horodatage - b.horodatage);
 
-  const plusRecente = data[0];
+  const plusRecente = homogenes[0];
   const recupereLe = plusRecente
     ? Math.floor(new Date(plusRecente.recupere_le).getTime() / 1000)
     : null;

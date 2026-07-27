@@ -20,6 +20,24 @@ export function estCodeFournisseur(valeur: string): valeur is CodeFournisseur {
 }
 
 /**
+ * Nature d'une série : inventée ou observée.
+ *
+ * La distinction n'est pas cosmétique. Deux fournisseurs réels qui divergent
+ * sur un même instrument se querellent de quelques points ; une série simulée
+ * et une série réelle n'ont aucun rapport de niveau. Recoller les deux fabrique
+ * un écart qui n'a jamais existé, et tout ce qui se calcule ensuite — moyennes,
+ * ATR, amplitudes, niveaux d'invalidation — hérite du mensonge.
+ *
+ * D'où une règle appliquée à la lecture du cache : on ne mélange jamais les
+ * deux natures dans une même série.
+ */
+export type NatureSerie = 'SIMULE' | 'REEL';
+
+export function natureFournisseur(code: CodeFournisseur): NatureSerie {
+  return code === 'mock' ? 'SIMULE' : 'REEL';
+}
+
+/**
  * Format normalisé unique. Tous les adaptateurs sortent exactement ceci,
  * quelles que soient les excentricités de leur API d'origine.
  *
