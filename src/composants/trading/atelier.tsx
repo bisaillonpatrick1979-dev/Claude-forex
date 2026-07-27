@@ -68,29 +68,54 @@ export function Atelier({
   const decimales = symboles.find((option) => option.code === symbole)?.decimales ?? 5;
 
   return (
-    // L'ordre visuel diffère selon la largeur. Sur grand écran, les trois
-    // colonnes sont côte à côte et l'ordre du DOM convient. Empilé — tablette
-    // comprise — on veut le graphique puis les agents en premier : ce sont eux
-    // qu'on regarde, pas le billet d'ordre. `order` évite de dupliquer le
-    // balisage pour obtenir deux dispositions.
-    // `items-start` est la correction principale : par défaut, une grille étire
-    // chaque colonne à la hauteur de la plus haute. Le fil des spécialistes
-    // grandit à chaque message, et le graphique grandissait avec lui —
-    // jusqu'à occuper tout l'écran. Il garde désormais sa hauteur propre, sauf
-    // en cockpit où l'étirement est justement ce qu'on veut.
-    <div className="cockpit-plein cockpit-flexible cockpit-etirer grid items-start gap-3 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,24rem)]">
-      <div className="cockpit-flexible order-3 flex flex-col gap-3 xl:order-1">
-        {panneauFirme}
-
-        <Panneau titre="Rejeu historique et vitesse">
-          <CommandeRejeu
-            etat={rejeu}
-            symbole={symbole}
-            intervalle={intervalle}
-            capitalInitial={capitalInitial}
+    // Le graphique domine, tout le reste passe dessous.
+    //
+    // La disposition précédente le coinçait dans une colonne centrale entre
+    // deux colonnes de panneaux : sur un portable, il lui restait moins de la
+    // moitié de la largeur, et les bougies devenaient des traits. Or c'est
+    // l'objet qu'on regarde le plus longtemps — il mérite la place, et les
+    // panneaux qu'on consulte par intermittence peuvent attendre plus bas.
+    //
+    // Le fil des spécialistes reste à côté : c'est le seul panneau qu'on suit
+    // *pendant* qu'on regarde le prix, et il a besoin de hauteur, pas de
+    // largeur. Tous les autres descendent.
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+        {/* Trois quarts de la largeur, et une hauteur qui suit l'écran plutôt
+            qu'un plafond fixe : sur un grand moniteur le graphique respire,
+            sur un portable il garde un plancher lisible. */}
+        <section className="flex h-[68vh] min-h-[26rem] flex-col overflow-hidden rounded-lg border border-bordure bg-panneau">
+          <ZoneGraphique
+            symboles={symboles}
+            marqueurs={marqueurs}
+            symboleControle={symbole}
+            intervalleControle={intervalle}
+            surSymbole={setSymbole}
+            surIntervalle={setIntervalle}
+            surDernierPrix={surDernierPrix}
           />
-        </Panneau>
+        </section>
 
+        <div className="flex min-h-0 flex-col gap-3">
+          {panneauAgents}
+
+          <Panneau titre="Fil des spécialistes" className="min-h-[20rem] flex-1">
+            <FilSpecialistes
+              profilId={profilId}
+              symbole={symbole}
+              intervalle={intervalle}
+              agents={agents}
+              blocage={blocageAgents}
+            />
+          </Panneau>
+        </div>
+      </div>
+
+      {/* Tout ce qu'on consulte par intermittence, sous le graphique. Deux
+          colonnes sur tablette, quatre sur grand écran : les panneaux sont
+          courts, les empiler sur une seule colonne obligerait à défiler pour
+          rien. */}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Panneau titre="Passer un ordre">
           <BilletOrdre
             symbole={symbole}
@@ -112,39 +137,19 @@ export function Atelier({
         <Panneau titre="Ordres en attente">
           <OrdresEnAttente ordres={ordres} intervalle={intervalle} />
         </Panneau>
-      </div>
 
-      {/* Colonne centrale : le graphique, et juste dessous ce que la firme a
-          réellement placé. C'est la lecture naturelle — on regarde le prix,
-          puis on regarde ce qu'on en a fait. */}
-      <div className="cockpit-flexible order-1 flex flex-col gap-3 xl:order-2">
-        <section className="cockpit-part-3 flex h-[46vh] min-h-[22rem] max-h-[36rem] flex-col overflow-hidden rounded-lg border border-bordure bg-panneau">
-          <ZoneGraphique
-            symboles={symboles}
-            marqueurs={marqueurs}
-            symboleControle={symbole}
-            intervalleControle={intervalle}
-            surSymbole={setSymbole}
-            surIntervalle={setIntervalle}
-            surDernierPrix={surDernierPrix}
-          />
-        </section>
-
-        <Panneau titre="Placements de la firme" className="cockpit-part-2">
+        <Panneau titre="Placements de la firme">
           <Placements placements={placements} />
         </Panneau>
-      </div>
 
-      <div className="cockpit-flexible order-2 flex flex-col gap-3 xl:order-3">
-        {panneauAgents}
+        {panneauFirme}
 
-        <Panneau titre="Fil des spécialistes" className="min-h-[28rem] flex-1">
-          <FilSpecialistes
-            profilId={profilId}
+        <Panneau titre="Rejeu historique et vitesse">
+          <CommandeRejeu
+            etat={rejeu}
             symbole={symbole}
             intervalle={intervalle}
-            agents={agents}
-            blocage={blocageAgents}
+            capitalInitial={capitalInitial}
           />
         </Panneau>
       </div>

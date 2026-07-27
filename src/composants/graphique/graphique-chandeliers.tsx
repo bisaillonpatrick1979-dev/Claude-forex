@@ -43,6 +43,15 @@ import type { IndicateursActifs, MarqueurDecision } from './types-graphique';
  * au graphique de se rafraîchir tout seul sans sauter.
  */
 
+/**
+ * Largeur par défaut d'une bougie, en pixels.
+ *
+ * Huit pixels laissent voir un corps et deux mèches distinctes. En dessous de
+ * quatre, une chandelle cesse d'être lisible : on ne distingue plus le corps de
+ * la mèche, et le graphique devient une brosse.
+ */
+const ESPACEMENT_BOUGIE = 8;
+
 const COULEURS = {
   fond: '#0a0d12',
   grille: '#1a212b',
@@ -141,6 +150,19 @@ export function GraphiqueChandeliers({
         borderColor: COULEURS.grille,
         timeVisible: true,
         secondsVisible: false,
+        // Largeur d'une bougie, en pixels. C'est le réglage qui décide si on
+        // voit des chandelles ou des traits : `fitContent()` comprimait les
+        // trois cents bougies chargées dans la largeur disponible, ce qui en
+        // donnait moins de deux pixels chacune sur un écran d'ordinateur
+        // portable. On préfère montrer moins de bougies, lisibles, et laisser
+        // le défilement faire le reste.
+        barSpacing: ESPACEMENT_BOUGIE,
+        // Plancher au zoom arrière : sans lui, un geste de pincement ramène au
+        // même mur de traits illisibles.
+        minBarSpacing: 2,
+        // Un peu de vide à droite : la dernière bougie ne doit pas être collée
+        // à l'échelle des prix, sinon on ne voit pas où elle en est.
+        rightOffset: 6,
       },
       localization: { locale: 'fr-CA' },
       autoSize: false,
@@ -289,7 +311,10 @@ export function GraphiqueChandeliers({
     if (!precedent || precedent.cle !== cleInstrument) {
       bougies.setData(chandeliers.map(versBougie));
       volume.setData(chandeliers.map(versVolume));
-      chart.timeScale().fitContent();
+      // `fitContent()` ferait entrer tout l'historique dans la largeur, au prix
+      // de bougies d'un pixel. On se cale sur les plus récentes en gardant
+      // l'espacement choisi ; l'historique reste accessible en défilant.
+      chart.timeScale().scrollToRealTime();
     } else {
       // Seules les bougies au moins aussi récentes que la dernière appliquée
       // peuvent avoir changé : la bougie en formation, et les nouvelles.
