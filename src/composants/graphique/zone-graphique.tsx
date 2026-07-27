@@ -172,7 +172,7 @@ export function ZoneGraphique({
       </div>
 
       {/* Le graphique occupe tout l'espace restant */}
-      <div className="min-h-64 flex-1">
+      <div className="min-h-48 flex-1">
         {etat.chandeliers.length > 0 ? (
           <GraphiqueChandeliers
             chandeliers={etat.chandeliers}

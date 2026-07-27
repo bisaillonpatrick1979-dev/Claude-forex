@@ -903,13 +903,26 @@ hors cockpit. Le canevas de lightweight-charts est positionné, il ne donne
 aucune hauteur à son parent — le graphique s'effondrerait à zéro. Il garde donc
 une hauteur explicite (`60vh`), que le cockpit remplace par 100 %.
 
-### Toutes les tailles de texte sont en rem
+### Agrandir le texte sans gonfler la mise en page
 
 Cent vingt classes `text-[10px]` / `text-[11px]` étaient réparties dans le
 code : illisibles sur tablette, et intouchables autrement qu'une par une. Elles
-sont converties en unités relatives, et la taille de base passe à 18 px en
-dessous de 1280 px, 16 px au-delà. Un seul point de réglage agrandit tout,
-et la densité voulue revient sur grand écran.
+sont converties en unités relatives.
+
+Première tentative, à ne pas refaire : relever `html { font-size }` à 18 px
+sous 1280 px. Le texte grossit bien, mais **l'échelle d'espacement de Tailwind
+est elle aussi en rem** — hauteurs, marges, rembourrages et `min-height` se
+retrouvaient gonflés de 12,5 % du même coup. Le graphique devenait démesuré et
+toute l'interface respirait trop.
+
+La taille de base reste donc à 16 px. Une règle sous 1280 px ne surcharge que
+les quatre classes de texte réellement utilisées, par sélecteurs échappés. Les
+utilitaires Tailwind vivent dans `@layer`, la règle non : elle l'emporte dans
+la cascade sans `!important`. La mise en page ne bouge pas d'un pixel.
+
+Le graphique, lui, passe de 55 % à 38 % de la hauteur d'écran hors cockpit :
+une vitrine de plus de la moitié de l'écran repoussait le journal des
+placements et le fil hors de vue.
 
 ### L'ordre d'empilement change avec la largeur
 
