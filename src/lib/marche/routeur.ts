@@ -6,7 +6,7 @@ import { ecrireCache, lireCache } from './cache';
 import { lireCle } from './cles';
 import { ErreurDonneesIndisponibles, ErreurFournisseur } from './erreurs';
 import { fournisseur as adaptateur } from './fournisseurs';
-import { consommerQuota, etatDepuisLigne, journaliserResultatFournisseur } from './quotas';
+import { etatDepuisLigne, journaliserResultatFournisseur, reserverAppel } from './quotas';
 import { chargerSymbole, type Symbole } from './symboles';
 import type {
   ClasseActif,
@@ -101,6 +101,18 @@ export async function obtenirChandeliers(options: OptionsRoutage): Promise<Resul
       continue;
     }
 
+    // La réservation précède l'appel : un refus du fournisseur compte quand
+    // même dans sa limite de débit, et compter après le succès laissait chaque
+    // échec ouvrir la porte au suivant.
+    const reservation = await reserverAppel(options.client, options.profilId, candidat.code, new Date(maintenant * 1000));
+    if (!reservation.autorise) {
+      incidents.push({
+        fournisseur: candidat.code,
+        raison: reservation.raison ?? 'Appel non autorisé.',
+      });
+      continue;
+    }
+
     const resultat = await tenterFournisseur(options, symbole, candidat, cle ?? undefined);
 
     if (resultat.type === 'echec') {
@@ -115,7 +127,6 @@ export async function obtenirChandeliers(options: OptionsRoutage): Promise<Resul
       continue;
     }
 
-    await consommerQuota(options.client, options.profilId, candidat.code, new Date(maintenant * 1000));
     await journaliserResultatFournisseur(
       options.client,
       options.profilId,
@@ -170,7 +181,9 @@ async function candidatsEligibles(
 ): Promise<readonly Candidat[]> {
   const { data } = await options.client
     .from('fournisseurs_donnees')
-    .select('code, actif, quota_limite, quota_utilise, fenetre_quota, quota_reinitialise_le, priorite_par_classe')
+    .select(
+      'code, actif, quota_limite, quota_utilise, fenetre_quota, quota_reinitialise_le, quota_minute_limite, quota_minute_utilise, quota_minute_reinitialise_le, priorite_par_classe',
+    )
     .eq('profil_id', options.profilId)
     .eq('actif', true);
 
@@ -203,11 +216,18 @@ async function candidatsEligibles(
       continue;
     }
 
+    // Pré-filtre seulement : la réservation atomique reste seule juge. On évite
+    // ici d'aller plus loin pour un fournisseur manifestement à bout, sans
+    // prétendre trancher les cas limites depuis une lecture non verrouillée.
     const quota = etatDepuisLigne(ligne, maintenantDate);
     if (quota.epuise) {
+      const debitAtteint =
+        quota.limiteParMinute !== null && quota.utiliseCetteMinute >= quota.limiteParMinute;
       incidents.push({
         fournisseur: code,
-        raison: `Quota épuisé (${quota.utilise}/${quota.limite ?? '∞'} par ${quota.fenetre.toLowerCase()}).`,
+        raison: debitAtteint
+          ? `Débit atteint (${quota.utiliseCetteMinute}/${quota.limiteParMinute} par minute).`
+          : `Quota épuisé (${quota.utilise}/${quota.limite ?? '∞'} par ${quota.fenetre.toLowerCase()}).`,
       });
       continue;
     }

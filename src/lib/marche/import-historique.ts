@@ -6,7 +6,7 @@ import { ecrireCache } from './cache';
 import { lireCle } from './cles';
 import { fournisseur as adaptateur } from './fournisseurs';
 import { dureeSecondes } from './intervalles';
-import { consommerQuota, etatDepuisLigne } from './quotas';
+import { reserverAppel } from './quotas';
 import { verifierSerie, type Anomalie, type RapportQualite } from './qualite';
 import { chargerSymbole } from './symboles';
 import type { Chandelier, CodeFournisseur, Intervalle } from './types';
@@ -88,6 +88,9 @@ const EXPLICATIONS: Readonly<Record<RaisonArret, string>> = {
 };
 
 const APPELS_MAX_DEFAUT = 40;
+/** Au-delà, on rend la main plutôt que de tenir une requête serveur ouverte :
+ *  une limite journalière ne s'attend pas, elle se reprend demain. */
+const ATTENTE_MAX_MS = 70_000;
 /** Au-delà, on considère que la source ne remonte pas plus loin. */
 const TRANCHES_VIDES_TOLEREES = 1;
 
@@ -103,7 +106,7 @@ export async function importerHistorique(options: OptionsImport): Promise<Rappor
   const choix = await choisirSource(options, symbole.correspondances);
   if ('erreur' in choix) return echec(choix.erreur);
 
-  const { code, ligneQuota } = choix;
+  const { code } = choix;
   const implementation = adaptateur(code)!;
   const symboleExterne = symbole.correspondances[code]!;
   const capacites = implementation.capacites();
@@ -119,7 +122,6 @@ export async function importerHistorique(options: OptionsImport): Promise<Rappor
   }
 
   const duree = dureeSecondes(options.intervalle);
-  const quotaDepart = etatDepuisLigne(ligneQuota, new Date(maintenant * 1000));
   const anomalies: Anomalie[] = [];
   let curseur = maintenant;
   let appels = 0;
@@ -128,6 +130,7 @@ export async function importerHistorique(options: OptionsImport): Promise<Rappor
   let plusRecente: number | null = null;
   let vides = 0;
   let raison: RaisonArret = 'CIBLE_ATTEINTE';
+  let derniereRaisonQuota: string | null = null;
 
   while (curseur > options.depuis) {
     if (appels >= appelsMax) {
@@ -139,13 +142,25 @@ export async function importerHistorique(options: OptionsImport): Promise<Rappor
       break;
     }
 
-    // Le quota est lu une fois puis suivi localement. Le relire à chaque tour
-    // rendrait la ligne consommée par nos propres appels — mais surtout,
-    // s'appuyer sur la valeur initiale sans y ajouter `appels` ferait un
-    // contrôle décoratif : la ligne ne bougerait jamais et la boucle ne
-    // s'arrêterait qu'au plafond d'appels, quitte à vider le quota du jour.
-    if (quotaDepart.limite !== null && quotaDepart.utilise + appels >= quotaDepart.limite) {
+    // Réservation atomique, seule autorité sur les deux fenêtres de quota.
+    const reservation = await reserverAppel(
+      options.client,
+      options.profilId,
+      code,
+      new Date(),
+    );
+
+    if (!reservation.autorise) {
+      // Un import est un traitement par lot : attendre la minute suivante est
+      // ce qu'on veut, pas un échec. Abandonner sur une limite de débit
+      // obligerait à relancer à la main toutes les huit requêtes.
+      const attente = attenteAvant(reservation.repriseLe);
+      if (attente !== null && attente <= ATTENTE_MAX_MS && !options.signal?.aborted) {
+        await patienter(attente);
+        continue;
+      }
       raison = 'QUOTA_EPUISE';
+      derniereRaisonQuota = reservation.raison;
       break;
     }
 
@@ -173,7 +188,6 @@ export async function importerHistorique(options: OptionsImport): Promise<Rappor
       };
     }
     appels += 1;
-    await consommerQuota(options.client, options.profilId, code, new Date(maintenant * 1000));
 
     // On ne garde que ce qui précède réellement le curseur : un fournisseur qui
     // arrondit sa date de fin peut rendre la bougie déjà écrite au tour d'avant.
@@ -248,13 +262,16 @@ export async function importerHistorique(options: OptionsImport): Promise<Rappor
       plusAncienne === null
         ? 'aucune période couverte'
         : `du ${jour(plusAncienne)} au ${jour(plusRecente!)}`;
-    return `${bougiesEcrites} bougies ${symbole!.code} ${options.intervalle} depuis ${code}, ${periode}, ${appels} appel${appels > 1 ? 's' : ''} — ${EXPLICATIONS[raison]}`;
+    const detail =
+      raison === 'QUOTA_EPUISE' && derniereRaisonQuota
+        ? `${derniereRaisonQuota} Reprendre après réinitialisation.`
+        : EXPLICATIONS[raison];
+    return `${bougiesEcrites} bougies ${symbole!.code} ${options.intervalle} depuis ${code}, ${periode}, ${appels} appel${appels > 1 ? 's' : ''} — ${detail}`;
   }
 }
 
 interface SourceChoisie {
   readonly code: CodeFournisseur;
-  readonly ligneQuota: Parameters<typeof etatDepuisLigne>[0];
 }
 
 /**
@@ -269,7 +286,7 @@ async function choisirSource(
   const { data } = await options.client
     .from('fournisseurs_donnees')
     .select(
-      'code, actif, quota_limite, quota_utilise, fenetre_quota, quota_reinitialise_le, priorite_par_classe',
+      'code, actif, quota_limite, quota_utilise, fenetre_quota, quota_reinitialise_le, quota_minute_limite, quota_minute_utilise, quota_minute_reinitialise_le, priorite_par_classe',
     )
     .eq('profil_id', options.profilId)
     .eq('actif', true);
@@ -297,7 +314,7 @@ async function choisirSource(
     };
   }
 
-  return { code: retenue.code as CodeFournisseur, ligneQuota: retenue };
+  return { code: retenue.code as CodeFournisseur };
 }
 
 function premiereBloquante(rapport: RapportQualite): string {
@@ -321,4 +338,15 @@ function echec(message: string, code: CodeFournisseur | null = null): RapportImp
     anomalies: [],
     message,
   };
+}
+
+function attenteAvant(reprise: Date | null): number | null {
+  if (!reprise) return null;
+  // Une seconde de marge : réserver à la seconde pile de la bascule ferait
+  // retomber sur la fenêtre qu'on vient de quitter.
+  return Math.max(0, reprise.getTime() - Date.now()) + 1_000;
+}
+
+function patienter(millisecondes: number): Promise<void> {
+  return new Promise((resoudre) => setTimeout(resoudre, millisecondes));
 }

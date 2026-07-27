@@ -25,6 +25,8 @@ export interface LigneFournisseur {
   readonly quotaLimite: number | null;
   readonly quotaUtilise: number;
   readonly fenetre: string;
+  readonly debitLimite: number | null;
+  readonly debitUtilise: number;
   readonly dernierStatut: string | null;
   readonly derniereErreur: string | null;
   readonly derniereVerification: string | null;
@@ -72,10 +74,19 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
     });
   }
 
+  // Les deux fenêtres sont affichées séparément. Les confondre est exactement
+  // ce qui a fait chercher pendant une heure : le fournisseur répondait 429 à
+  // douze requêtes sur huit cents, parce que la limite qui mordait était celle
+  // de la minute.
   const quota =
     ligne.quotaLimite === null
       ? 'illimité'
       : `${ligne.quotaUtilise} / ${ligne.quotaLimite} par ${ligne.fenetre.toLowerCase()}`;
+
+  const debit =
+    ligne.debitLimite === null
+      ? null
+      : `${ligne.debitUtilise} / ${ligne.debitLimite} par minute`;
 
   return (
     <Panneau>
@@ -87,7 +98,7 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
           </div>
           <p className="chiffre mt-0.5 text-xs text-texte-attenue">
             {ligne.implemente
-              ? `${ligne.intervalles.join(' ')} · quota ${quota}`
+              ? `${ligne.intervalles.join(' ')} · quota ${quota}${debit ? ` · débit ${debit}` : ''}`
               : 'adaptateur non livré'}
           </p>
         </div>
@@ -226,12 +237,15 @@ function CarteFournisseur({ ligne }: { ligne: LigneFournisseur }) {
 
 function Etat({ ligne }: { ligne: LigneFournisseur }) {
   const epuise = ligne.quotaLimite !== null && ligne.quotaUtilise >= ligne.quotaLimite;
+  const debitAtteint = ligne.debitLimite !== null && ligne.debitUtilise >= ligne.debitLimite;
 
   const [texte, classe] = !ligne.implemente
     ? ['non livré', 'text-texte-attenue']
     : !ligne.actif
       ? ['inactif', 'text-texte-attenue']
-      : epuise
+      : debitAtteint
+        ? ['débit atteint', 'text-alerte']
+        : epuise
         ? ['quota épuisé', 'text-alerte']
         : ligne.dernierStatut === 'ERREUR'
           ? ['en erreur', 'text-baisse']

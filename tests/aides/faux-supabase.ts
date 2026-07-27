@@ -75,10 +75,80 @@ export interface FauxClient {
   readonly ecritures: Ecriture[];
 }
 
+/**
+ * Réservation d'appel, rejouée fidèlement en mémoire.
+ *
+ * Le faux aurait pu se contenter de toujours autoriser. Ce serait passer à
+ * côté de l'essentiel : la limite de débit est précisément ce qu'on veut
+ * éprouver, et un test qui ne la voit jamais mordre ne prouverait rien. La
+ * ligne est donc bel et bien décrémentée, comme le ferait PostgreSQL.
+ */
+function reserver(
+  donnees: Donnees,
+  profilId: string,
+  code: string,
+  maintenant: Date,
+): { autorise: boolean; raison: string | null; reprise_le: string | null } {
+  const ligne = (donnees.fournisseurs_donnees ?? []).find(
+    (candidate) => candidate.profil_id === profilId && candidate.code === code,
+  );
+  if (!ligne) {
+    return { autorise: false, raison: `Fournisseur ${code} inconnu pour ce profil.`, reprise_le: null };
+  }
+
+  const debutMinute = new Date(maintenant);
+  debutMinute.setUTCSeconds(0, 0);
+
+  const reinitMinute = ligne.quota_minute_reinitialise_le as string | undefined;
+  const minuteExpiree =
+    reinitMinute === undefined || new Date(reinitMinute).getTime() < debutMinute.getTime();
+  const utiliseMinute = minuteExpiree ? 0 : Number(ligne.quota_minute_utilise ?? 0);
+  const limiteMinute = ligne.quota_minute_limite as number | null | undefined;
+
+  if (limiteMinute != null && utiliseMinute >= limiteMinute) {
+    return {
+      autorise: false,
+      raison: `Débit atteint (${utiliseMinute}/${limiteMinute} par minute).`,
+      reprise_le: new Date(debutMinute.getTime() + 60_000).toISOString(),
+    };
+  }
+
+  const limite = ligne.quota_limite as number | null;
+  const utilise = Number(ligne.quota_utilise ?? 0);
+  if (limite !== null && utilise >= limite) {
+    return {
+      autorise: false,
+      raison: `Quota atteint (${utilise}/${limite} par ${String(ligne.fenetre_quota).toLowerCase()}).`,
+      reprise_le: null,
+    };
+  }
+
+  ligne.quota_utilise = utilise + 1;
+  ligne.quota_minute_utilise = utiliseMinute + 1;
+  ligne.quota_minute_reinitialise_le = debutMinute.toISOString();
+  return { autorise: true, raison: null, reprise_le: null };
+}
+
 export function fauxClient(donnees: Donnees): FauxClient {
   const ecritures: Ecriture[] = [];
 
   const client = {
+    async rpc(nom: string, parametres: Record<string, unknown>) {
+      if (nom !== 'reserver_appel_fournisseur') {
+        return { data: null, error: { message: `Fonction ${nom} non simulée.` } };
+      }
+      const maintenant = parametres.p_maintenant
+        ? new Date(String(parametres.p_maintenant))
+        : new Date();
+      const resultat = reserver(
+        donnees,
+        String(parametres.p_profil_id),
+        String(parametres.p_code),
+        maintenant,
+      );
+      return { data: [resultat], error: null };
+    },
+
     from(table: string) {
       return {
         select: () => new Requete(table, donnees, ecritures),
