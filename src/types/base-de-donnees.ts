@@ -968,13 +968,13 @@ export type Database = {
           id: string;
           levier_max: number;
           maj_le: string;
+          part_facteur_max_pct: number;
+          part_position_max_pct: number;
           perte_journaliere_max_pct: number;
-          positions_correlees_max: number;
           positions_max: number;
           profil_id: string;
           risque_max_par_trade_pct: number;
           risque_total_max_pct: number;
-          seuil_correlation: number;
           stop_loss_obligatoire: boolean;
         };
         Insert: {
@@ -984,13 +984,13 @@ export type Database = {
           id?: string;
           levier_max?: number;
           maj_le?: string;
+          part_facteur_max_pct?: number;
+          part_position_max_pct?: number;
           perte_journaliere_max_pct?: number;
-          positions_correlees_max?: number;
           positions_max?: number;
           profil_id: string;
           risque_max_par_trade_pct?: number;
           risque_total_max_pct?: number;
-          seuil_correlation?: number;
           stop_loss_obligatoire?: boolean;
         };
         Update: {
@@ -1000,13 +1000,13 @@ export type Database = {
           id?: string;
           levier_max?: number;
           maj_le?: string;
+          part_facteur_max_pct?: number;
+          part_position_max_pct?: number;
           perte_journaliere_max_pct?: number;
-          positions_correlees_max?: number;
           positions_max?: number;
           profil_id?: string;
           risque_max_par_trade_pct?: number;
           risque_total_max_pct?: number;
-          seuil_correlation?: number;
           stop_loss_obligatoire?: boolean;
         };
         Relationships: [

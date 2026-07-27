@@ -5,8 +5,10 @@ import type { ClasseActif } from '@/lib/marche/types';
  *
  * Heuristique assumée, pas une mesure : tant qu'il n'y a pas d'historique de
  * rendements (phase 6), calculer une vraie corrélation est impossible. Mais
- * refuser de plafonner les positions corrélées en attendant reviendrait à
- * autoriser cinq fois le même pari sous cinq noms différents.
+ * renoncer en attendant reviendrait à autoriser cinq fois le même pari sous
+ * cinq noms différents — c'est cette estimation qui alimente la matrice du
+ * risque agrégé (`portefeuille.ts`) et la contrainte de concentration
+ * (`concentration.ts`).
  *
  * Pour le Forex et les matières premières cotées en devise, on raisonne sur
  * l'exposition aux devises : acheter EUR/USD, c'est être long EUR et short USD.
@@ -72,15 +74,6 @@ export function correlationEstimee(a: ExpositionPosition, b: ExpositionPosition)
   }
 
   return 0;
-}
-
-/** Nombre de positions ouvertes fortement corrélées à celle proposée. */
-export function compterCorrelees(
-  proposee: ExpositionPosition,
-  ouvertes: readonly ExpositionPosition[],
-  seuil: number,
-): number {
-  return ouvertes.filter((ouverte) => correlationEstimee(proposee, ouverte) >= seuil).length;
 }
 
 /**

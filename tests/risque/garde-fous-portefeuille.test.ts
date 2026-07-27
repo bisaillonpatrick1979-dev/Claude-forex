@@ -18,8 +18,10 @@ const PARAMETRES: ParametresRisque = {
   risqueMaxParTradePct: 100,
   risqueTotalMaxPct: 2,
   positionsMax: 10,
-  positionsCorreleesMax: 10,
-  seuilCorrelation: 0.7,
+  // Neutralisés : ce fichier teste le budget agrégé, pas la concentration,
+  // qui a ses propres tests.
+  partPositionMaxPct: 100,
+  partFacteurMaxPct: 100,
   perteJournaliereMaxPct: 100,
   drawdownMaxPct: 100,
   levierMax: 500,

@@ -31,7 +31,7 @@ export default async function PageReglages() {
     supabase
       .from('parametres_risque')
       .select(
-        'risque_max_par_trade_pct, risque_total_max_pct, positions_max, positions_correlees_max, perte_journaliere_max_pct, drawdown_max_pct, levier_max, fenetre_evenement_macro_minutes, stop_loss_obligatoire',
+        'risque_max_par_trade_pct, risque_total_max_pct, positions_max, part_position_max_pct, part_facteur_max_pct, perte_journaliere_max_pct, drawdown_max_pct, levier_max, fenetre_evenement_macro_minutes, stop_loss_obligatoire',
       )
       .maybeSingle(),
     supabase
@@ -171,7 +171,14 @@ export default async function PageReglages() {
               <Limite libelle="Risque par trade" valeur={`${formaterNombre(risque.risque_max_par_trade_pct, 2)} %`} />
               <Limite libelle="Risque total" valeur={`${formaterNombre(risque.risque_total_max_pct, 2)} %`} />
               <Limite libelle="Positions max" valeur={formaterNombre(risque.positions_max, 0)} />
-              <Limite libelle="Corrélées max" valeur={formaterNombre(risque.positions_correlees_max, 0)} />
+              <Limite
+                libelle="Part max d’une position"
+                valeur={`${formaterNombre(risque.part_position_max_pct, 0)} % du risque agrégé`}
+              />
+              <Limite
+                libelle="Part max d’un facteur"
+                valeur={`${formaterNombre(risque.part_facteur_max_pct, 0)} % du budget`}
+              />
               <Limite libelle="Perte journalière" valeur={`${formaterNombre(risque.perte_journaliere_max_pct, 2)} %`} />
               <Limite libelle="Drawdown max" valeur={`${formaterNombre(risque.drawdown_max_pct, 2)} %`} />
               <Limite libelle="Levier max" valeur={`${formaterNombre(risque.levier_max, 0)}:1`} />

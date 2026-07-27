@@ -21,9 +21,9 @@ import type { Sens } from '@/lib/execution/types';
  *    précisément la question à poser avant d'en ajouter une.
  *
  * Le vrai trou de sécurité était ailleurs : le compteur de positions
- * corrélées. Trois positions à 0,69 de corrélation, sous un seuil réglé à
- * 0,70, comptaient pour zéro position corrélée — trois fois le même pari,
- * approuvé sans réserve.
+ * corrélées, qui comptait pour zéro trois positions à 0,69 sous un seuil réglé
+ * à 0,70. Il a été remplacé — voir `concentration.ts`, qui s'appuie sur les
+ * contributions marginales calculées ici.
  *
  * La formule correcte est celle du risque d'un portefeuille : on signe chaque
  * exposition par son sens, et on agrège par la matrice de corrélation.
