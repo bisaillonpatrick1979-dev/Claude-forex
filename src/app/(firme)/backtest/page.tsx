@@ -18,7 +18,7 @@ export default async function PageBacktest() {
     supabase
       .from('backtests')
       .select(
-        'id, symbole_id, intervalle, debut, fin, configuration, metriques, comparateurs',
+        'id, symbole_id, intervalle, debut, fin, configuration, metriques, comparateurs, validation',
       )
       .order('cree_le', { ascending: false })
       .limit(10),
@@ -64,6 +64,7 @@ export default async function PageBacktest() {
               configuration={(ligne.configuration ?? {}) as Record<string, unknown>}
               metriques={ligne.metriques as unknown as Metriques | null}
               comparateurs={ligne.comparateurs as unknown as Comparateur[] | null}
+              validation={ligne.validation as unknown as BlocValidation | null}
             />
           ))}
         </div>
@@ -80,6 +81,7 @@ function CarteResultat({
   configuration,
   metriques,
   comparateurs,
+  validation,
 }: {
   symbole: string;
   intervalle: string;
@@ -88,6 +90,7 @@ function CarteResultat({
   configuration: Record<string, unknown>;
   metriques: Metriques | null;
   comparateurs: readonly Comparateur[] | null;
+  validation: BlocValidation | null;
 }) {
   if (!metriques) return null;
 
@@ -106,6 +109,29 @@ function CarteResultat({
         </p>
       </div>
 
+      {validation?.walkForward ? (
+        <div
+          className={`mt-3 rounded border px-3 py-2 text-xs leading-relaxed ${
+            validation.walkForward.significativite?.significatif
+              ? 'border-hausse/40 bg-hausse/10 text-hausse'
+              : 'border-alerte/40 bg-alerte/10 text-alerte'
+          }`}
+        >
+          <p className="mb-1 font-medium uppercase tracking-wide">
+            {validation.walkForward.significativite?.significatif
+              ? 'Distinguable du hasard'
+              : 'Ne se distingue pas du hasard'}
+          </p>
+          <p>{validation.walkForward.verdict}</p>
+          {validation.monteCarlo ? <p className="mt-1">{validation.monteCarlo.verdict}</p> : null}
+        </div>
+      ) : (
+        <p className="mt-3 rounded border border-bordure/60 px-3 py-2 text-xs text-texte-attenue">
+          Historique trop court pour découper des fenêtres de validation : les chiffres ci-dessous
+          décrivent une seule période et ne disent rien de leur reproductibilité.
+        </p>
+      )}
+
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Mesure etiquette="Rendement" valeur={pourcentage(metriques.rendementPct)} signe />
         <Mesure etiquette="Drawdown max" valeur={pourcentage(-metriques.drawdownMaxPct)} signe />
@@ -114,6 +140,30 @@ function CarteResultat({
         <Mesure etiquette="Réussite" valeur={pourcentage(metriques.tauxReussitePct)} />
         <Mesure etiquette="Facteur profit" valeur={nombre(metriques.facteurProfit)} />
       </div>
+
+      {validation?.walkForward ? (
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Mesure
+            etiquette="Hors échantillon"
+            valeur={pourcentage(validation.walkForward.horsEchantillon?.rendementPct)}
+            signe
+          />
+          <Mesure
+            etiquette="Dégradation"
+            valeur={pourcentage(-Math.abs(validation.walkForward.degradation ?? 0))}
+            signe
+          />
+          <Mesure
+            etiquette="Fenêtres gagnantes"
+            valeur={pourcentage((validation.walkForward.partFenetresGagnantes ?? 0) * 100)}
+          />
+          <Mesure
+            etiquette="Drawdown 95e centile"
+            valeur={pourcentage(-(validation.monteCarlo?.drawdownPercentile95 ?? 0))}
+            signe
+          />
+        </div>
+      ) : null}
 
       {comparateurs && comparateurs.length > 0 ? (
         <div className="mt-4">
@@ -227,4 +277,25 @@ function resumerHistorique(
   }
 
   return resume;
+}
+
+/**
+ * Bloc de validation tel qu'il est stocké. Volontairement permissif : c'est du
+ * JSON en base, et une forme inattendue doit dégrader l'affichage plutôt que
+ * casser la page.
+ */
+interface BlocValidation {
+  readonly walkForward: {
+    readonly fenetres?: number;
+    readonly horsEchantillon?: Metriques;
+    readonly enEchantillon?: Metriques;
+    readonly degradation?: number;
+    readonly partFenetresGagnantes?: number;
+    readonly verdict?: string;
+    readonly significativite?: { readonly significatif?: boolean } | null;
+  } | null;
+  readonly monteCarlo: {
+    readonly drawdownPercentile95?: number;
+    readonly verdict?: string;
+  } | null;
 }

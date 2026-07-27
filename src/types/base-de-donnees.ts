@@ -169,6 +169,7 @@ export type Database = {
           statut: Database["public"]["Enums"]["statut_backtest"];
           symbole_id: string;
           termine_le: string | null;
+          validation: Json | null;
         };
         Insert: {
           capital_initial: number;
@@ -186,6 +187,7 @@ export type Database = {
           statut?: Database["public"]["Enums"]["statut_backtest"];
           symbole_id: string;
           termine_le?: string | null;
+          validation?: Json | null;
         };
         Update: {
           capital_initial?: number;
@@ -203,6 +205,7 @@ export type Database = {
           statut?: Database["public"]["Enums"]["statut_backtest"];
           symbole_id?: string;
           termine_le?: string | null;
+          validation?: Json | null;
         };
         Relationships: [
           {
@@ -1875,6 +1878,7 @@ export type Database = {
         Args: {
           p_embedding: string;
           p_famille?: string;
+          p_horizon?: Database["public"]["Enums"]["horizon_trading"];
           p_limite?: number;
           p_methode: string;
           p_profil_id?: string;

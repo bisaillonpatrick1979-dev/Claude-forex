@@ -5,6 +5,8 @@ import { z } from 'zod';
 
 import { calculerComparateurs, verdict } from '@/lib/backtest/comparateurs';
 import { calculerMetriques } from '@/lib/backtest/metriques';
+import { simulerMonteCarlo } from '@/lib/backtest/monte-carlo';
+import { executerWalkForward } from '@/lib/backtest/walk-forward';
 import { executerBacktest } from '@/lib/backtest/moteur';
 import {
   STRATEGIES,
@@ -132,6 +134,34 @@ export async function lancerBacktest(
   });
   const metriques = calculerMetriques(resultat.courbeEquite, resultat.trades, base.intervalle);
 
+  // Monte-Carlo sur l'ordre des trades : le backtest n'a montré qu'un chemin,
+  // et son drawdown est autant un accident d'ordonnancement qu'une propriété
+  // de la stratégie.
+  const monteCarlo = simulerMonteCarlo({
+    trades: resultat.trades,
+    capitalInitial: analyse.data.capitalInitial,
+    methode: 'BOOTSTRAP',
+    graine: 1,
+  });
+
+  // Walk-forward : le seul chiffre honnête quand plusieurs candidats existent.
+  // Les fenêtres sont dimensionnées sur la série disponible plutôt que fixées,
+  // sinon un historique court ne produirait aucune fenêtre du tout.
+  const fenetreValidation = Math.max(30, Math.floor(chandeliers.length / 6));
+  const validation = executerWalkForward({
+    chandeliers,
+    instrument: instrument.instrument,
+    intervalle: base.intervalle,
+    capitalInitial: analyse.data.capitalInitial,
+    candidats: STRATEGIES.map((option) => ({
+      code: option.code,
+      nom: option.nom,
+      fabriquer: () => decideurStrategie(option.code),
+    })),
+    fenetreApprentissage: Math.max(100, fenetreValidation * 2),
+    fenetreValidation,
+  });
+
   const comparateurs = calculerComparateurs({
     base,
     quantite: tailleMedianeOuDefaut(resultat.trades.map((trade) => trade.quantite)),
@@ -156,6 +186,24 @@ export async function lancerBacktest(
       statut: 'TERMINE',
       metriques: JSON.parse(JSON.stringify(metriques)),
       comparateurs: JSON.parse(JSON.stringify(comparateurs)),
+      validation: JSON.parse(
+        JSON.stringify({
+          monteCarlo,
+          // Les fenêtres détaillées ne servent pas à l'affichage et pèsent
+          // lourd : on garde l'agrégat, qui est ce qui compte.
+          walkForward: validation
+            ? {
+                fenetres: validation.fenetres.length,
+                horsEchantillon: validation.horsEchantillon,
+                enEchantillon: validation.enEchantillon,
+                degradation: validation.degradation,
+                significativite: validation.significativite,
+                partFenetresGagnantes: validation.partFenetresGagnantes,
+                verdict: validation.verdict,
+              }
+            : null,
+        }),
+      ),
       // La courbe est échantillonnée : trois cents points suffisent à la
       // dessiner, et vingt mille alourdiraient chaque chargement de page.
       courbe_equite: JSON.parse(JSON.stringify(echantillonner(resultat.courbeEquite, 300))),
@@ -181,11 +229,15 @@ export async function lancerBacktest(
   });
 
   revalidatePath('/backtest');
-  return {
-    ok: true,
-    backtestId: data?.id,
-    message: verdict(metriques, comparateurs),
-  };
+  // Le verdict statistique passe avant celui des comparateurs : « +18 % »
+  // n'a aucun sens tant qu'on ne sait pas si c'est distinguable du hasard.
+  const messages = [
+    validation?.verdict,
+    monteCarlo?.verdict,
+    verdict(metriques, comparateurs),
+  ].filter((texte): texte is string => Boolean(texte));
+
+  return { ok: true, backtestId: data?.id, message: messages.join(' ') };
 }
 
 /** Import d'historique déclenché depuis l'écran de backtest. */
