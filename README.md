@@ -11,7 +11,10 @@ ne promet aucun rendement et n'affiche que des résultats mesurés.
 ## État
 
 Phases 0 (fondations), 1 (données de marché), 2 (graphique), 3 (moteur d'exécution
-et garde-fous de risque) et 4a (gouvernance des agents) livrées. Voir
+et garde-fous de risque), 4a (gouvernance des agents), 4b (orchestrateur LLM),
+5 (salle des marchés en temps réel) et 6 (backtest chiffré et validation
+statistique) livrées. La phase 7 (passerelle courtier réel) reste volontairement
+bloquée : rien n'en est codé. Voir
 [NOTES.md](./NOTES.md) pour l'avancement détaillé, les décisions d'architecture et les dettes
 assumées.
 

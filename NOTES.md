@@ -16,7 +16,7 @@ Tenu à jour à chaque phase.
 | 4a | Gouvernance des agents : permissions, autonomie, file de validation | ✅ livrée |
 | 4b | Orchestrateur : cycles LLM, débat, mémoire, enveloppe de capital, rejeu | ✅ livrée |
 | 5 | Salle des marchés en temps réel : fil des spécialistes, marqueurs de décision | ✅ livrée |
-| 6 | Backtest chiffré et comparateurs (buy-and-hold, stratégie aléatoire) | à faire |
+| 6 | Backtest chiffré, comparateurs obligatoires, validation statistique | ✅ livrée |
 | 7 | Passerelle broker réel — **à discuter, rien de codé** | bloquée volontairement |
 
 ---
@@ -897,6 +897,91 @@ désapprendre.
 Une leçon dont l'embedding échoue est écrite quand même, marquée « non
 indexée » dans l'historique. Elle reste lisible mais ne sera jamais resservie à
 un agent — c'est dit plutôt que perdu.
+
+---
+
+## Décisions d'architecture (phase 6)
+
+### Le backtest n'a pas son propre moteur d'exécution
+
+`src/lib/backtest/moteur.ts` rejoue des bougies et délègue chaque décision à un
+`Decideur`. Les remplissages, le spread, la commission, le swap, le slippage,
+la marge et l'appel de marge viennent de `src/lib/execution/` — exactement le
+code qui tient le portefeuille papier. Un backtest doté de son arithmétique à
+lui finirait toujours par être le plus clément des deux, et ne prédirait rien.
+
+### Deux barrières anti-look-ahead, pas une
+
+La barrière d'**information** : le décideur ne reçoit qu'une tranche de bougies
+coupée à l'instant de la décision. Ce n'est pas une consigne, c'est une donnée
+qu'il n'a pas.
+
+La barrière d'**exécution** : un ordre décidé sur la bougie N ne peut se
+remplir qu'à partir de N+1, via `horodatageDecision`. Sans elle, « acheter
+quand la bougie clôture en hausse » se remplirait à l'ouverture de cette même
+bougie — à un prix connu seulement après coup. C'est le défaut qui produit les
+courbes à 400 % par an qui perdent de l'argent en réel.
+
+Les deux sont couvertes par `tests/backtest/anti-look-ahead.test.ts`.
+
+### Les comparateurs ne sont pas optionnels
+
+Chaque backtest calcule systématiquement deux références sur **le même moteur,
+le même instrument, les mêmes coûts et la même barrière** : achat-conservation,
+et une stratégie aléatoire de même fréquence (même nombre de trades, graine
+fixe donc reproductible). Elles sont affichées même quand elles gagnent — c'est
+le seul cas où elles servent vraiment à quelque chose.
+
+Un rendement nu ne dit rien : « +18 % » est excellent si le marché a fait −5 %
+et lamentable s'il a fait +60 %.
+
+### Trois niveaux de validation, parce qu'un seul chemin ne prouve rien
+
+**Walk-forward** : le candidat est choisi sur la fenêtre d'apprentissage, puis
+mesuré sur la fenêtre suivante, jamais consultée pour choisir. Seul l'agrégat
+hors échantillon compte ; l'écart avec l'apprentissage est la signature du
+surajustement, et il est publié.
+
+**Monte-Carlo** sur l'ordre des trades. `PERMUTATION` rejoue les mêmes trades
+dans un autre ordre — le résultat final est identique, seul le chemin change,
+ce qui isole la part du drawdown due à l'ordonnancement. `BOOTSTRAP` tire avec
+remise, et fait varier aussi le résultat final. Les deux supposent des trades
+interchangeables (pas d'autocorrélation, pas de régime) : c'est faux en toute
+rigueur, et bien plus informatif que le chemin unique du backtest.
+
+**Sharpe dégonflé** (Bailey & López de Prado, 2014). Essayer quarante
+stratégies et garder la meilleure produit une gagnante même sur du bruit pur ;
+son Sharpe mesure alors la chance. Le DSR est le Sharpe probabiliste dont le
+seuil est le maximum attendu *par hasard* sur N essais. `SEUIL_SIGNIFICATIVITE`
+vaut 0,95, et l'écran affiche « ne se distingue pas du hasard » quand il n'est
+pas franchi — en rouge, au-dessus des chiffres flatteurs, pas en note de bas de
+page.
+
+Quand l'historique est trop court pour découper des fenêtres, la carte le dit
+explicitement au lieu de laisser croire à une validation qui n'a pas eu lieu.
+
+### L'import de fichier plutôt qu'un abonnement
+
+Aucun palier gratuit ne donne quinze ans de M5, et les bougies simulées ne
+donneront jamais de vrais mouvements. Un fichier CSV ou JSON téléchargé une
+fois apporte la profondeur sans consommer un appel.
+
+L'analyse a lieu **dans le navigateur** : un million de lignes ne passe pas
+dans une action serveur. Conséquence assumée et écrite dans le code — la
+validation est contournable, ce qui est acceptable parce qu'un import ne touche
+que les données du profil qui l'envoie, ne passe aucun ordre et ne dépense
+rien. Les bornes indiscutables (haut ≥ bas, haut ≥ max(ouverture, clôture)…)
+sont revérifiées à l'écriture.
+
+Le `fournisseur_code` vaut `import` : ni `mock` — ce ne sont pas des bougies
+inventées — ni le nom d'un fournisseur dont on n'a pas constaté la réponse. Ces
+bougies n'expirent pas : un historique ne se rafraîchit pas.
+
+Deux pièges du parseur, tranchés au niveau du **fichier entier** et non de la
+ligne : le séparateur décimal (`1.088` lu comme 1088 est fatal en FX, et
+invisible parce que les quatre valeurs OHLC dérivent ensemble) et l'ordre
+jour/mois. Au-delà de 50 % de lignes rejetées, l'import est bloqué plutôt que
+partiel.
 
 ---
 
