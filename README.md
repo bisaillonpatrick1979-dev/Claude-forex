@@ -1,84 +1,64 @@
-# Trading Floor IA
+# HailQuant
 
-Une firme de trading simulée. Des agents IA spécialisés analysent des marchés réels
-(Forex, indices, actions, crypto), débattent entre eux, prennent des décisions et les
-exécutent dans un moteur de portefeuille — la conversation se déroule en direct à côté des
-graphiques.
+Laboratoire de trading algorithmique — **argent fictif exclusivement**.
 
-**Résultats simulés. Le trading comporte un risque de perte totale du capital.** Ce projet
-ne promet aucun rendement et n'affiche que des résultats mesurés.
+> Simulation. Aucun ordre réel n'est transmis. Le mode LIVE est un stub qui lève
+> une exception, et le restera jusqu'à la phase 7.
 
-## État
+## Démarrer (Termux)
 
-Phases 0 (fondations), 1 (données de marché), 2 (graphique), 3 (moteur d'exécution
-et garde-fous de risque) et 4a (gouvernance des agents) livrées. Voir
-[NOTES.md](./NOTES.md) pour l'avancement détaillé, les décisions d'architecture et les dettes
-assumées.
-
-Le mode réel est verrouillé par trois barrières indépendantes (constante TypeScript,
-variable d'environnement, triggers PostgreSQL). Aucun code d'ordre réel n'existe dans le
-dépôt.
-
-## Qui a le droit de trader
-
-Chaque agent porte un niveau d'autonomie, réglable dans **Agents** :
-
-| Niveau | Ce que l'agent peut faire |
-| --- | --- |
-| Observateur | analyse et débat, aucune écriture sur le portefeuille |
-| Proposition | propose des ordres ; rien ne part sans validation humaine |
-| Autonome | fait exécuter ses ordres seul, dans ses limites |
-
-L'autonomie n'est ouverte qu'au trader et au gestionnaire de portefeuille, et un trigger
-PostgreSQL la refuse aux autres rôles. À cela s'ajoutent, par agent : droits d'ouverture, de
-fermeture et de déplacement de stop, taille maximale, risque maximal par trade, nombre de
-trades par jour, périmètre d'instruments, confiance minimale exigée, et un seuil de taille
-au-delà duquel même un agent autonome redemande une validation.
-
-Trois garanties valent en permanence : les plafonds du portefeuille s'appliquent toujours (la
-limite d'un agent ne peut que resserrer, jamais élargir), le mode d'opération prime sur les
-niveaux individuels, et le kill switch coupe tout le monde. Les ordres en attente se traitent
-dans **Validation**.
-
-## Stack
-
-Next.js 15 (App Router) · TypeScript strict · Tailwind CSS v4 · Supabase (PostgreSQL,
-Realtime, RLS, pgvector) · lightweight-charts v5 · Vitest · déploiement Vercel.
-
-## Démarrer
-
-```bash
+```sh
 npm install
-cp .env.example .env.local   # puis remplir les variables Supabase
-npm run dev
+npm run dev        # serveur local
+npm run test       # tests unitaires
+npm run typecheck  # TypeScript strict, zéro any
+npm run build      # bundle de production
 ```
 
-Les migrations sont dans `supabase/migrations/`, à appliquer dans l'ordre des noms de
-fichiers.
+Aucune clé API n'est nécessaire pour démarrer : Binance et Kraken exposent leurs
+bougies publiquement. Voir `.env.example` pour les fournisseurs qui en exigent une.
 
-## Commandes
+## Architecture
 
-| Commande | Effet |
-| --- | --- |
-| `npm run dev` | serveur de développement |
-| `npm run build` | build de production |
-| `npm test` | tests Vitest (logique métier) |
-| `npm run verif-types` | `tsc --noEmit` |
-| `npm run lint` | ESLint |
-
-## Structure
+Le moteur reprend le découpage de LEAN (QuantConnect) en cinq modules
+interchangeables, chacun défini par une interface avant toute implémentation :
 
 ```
-src/app/             routes (App Router) ; le groupe (firme) porte les pages authentifiées
-src/composants/      composants d'interface, dont le graphique en chandeliers
-src/lib/agents/      niveaux d'autonomie, permissions, lecture serveur des agents
-src/lib/config/      drapeaux, modes, valeurs par défaut de risque, environnement
-src/lib/execution/   moteur simulé, coûts, marge, séances, persistance
-src/lib/risque/      garde-fous et estimation de corrélation
-src/lib/marche/      interface fournisseur, adaptateurs, routeur, quotas, cache
-src/lib/securite/    chiffrement des clés API, limitation de débit
-src/lib/supabase/    clients navigateur / serveur / admin / middleware
-src/types/           types générés depuis le schéma Supabase
-supabase/migrations/ schéma, RLS, amorçage
-tests/               tests Vitest
+Univers → Alpha → Portefeuille → Risque → Exécution
 ```
+
+### La règle qui prime sur toutes les autres
+
+**Aucun module ne peut lire une bougie future.** Le moteur est événementiel :
+les bougies entrent une par une, en ordre chronologique, et `StrategyContext`
+ne donne accès qu'aux bougies **closes** jusqu'à l'index courant. Ce n'est pas
+une convention à respecter, c'est une impossibilité structurelle — le contexte
+ne détient pas la série complète.
+
+Une plateforme qui autorise le look-ahead produit des backtests magnifiques et
+des pertes réelles.
+
+### Argent
+
+Aucun montant n'est manipulé en flottant. `lib/decimal.ts` travaille sur des
+`bigint` à échelle fixe (8 décimales, soit le satoshi). Toute division exige un
+mode d'arrondi explicite : arrondir une taille de position vers le haut ferait
+franchir le plafond de risque qu'on vient de calculer.
+
+## Phases
+
+| Phase | Objet | État |
+| --- | --- | --- |
+| 1 | Fondations : Vite, TS strict, i18n, types, décimal, navigation | ✅ |
+| 2 | Données et graphique | ✅ |
+| 3 | Portefeuille virtuel | à venir |
+| 4 | Moteur et cinq modules | à venir |
+| 5 | Backtest et validation | à venir |
+| 6 | Couche IA | à venir |
+| 7 | Brokers, garde-fous, coffre chiffré | à venir |
+
+## Attribution
+
+Graphiques par [TradingView](https://www.tradingview.com/lightweight-charts/)
+(lightweight-charts, Apache 2.0). L'attribution reste visible sur le graphique,
+comme la licence l'exige.

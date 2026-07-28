@@ -1,46 +1,59 @@
+import type { Currency } from '@/types/portfolio';
+import type { Lang } from '@/i18n';
+
 /**
- * Formatage des nombres affichés.
+ * Mise en forme des montants et des pourcentages.
  *
- * `null` et `undefined` ne sont jamais remplacés par 0 : une donnée absente
- * s'affiche « — ». Un zéro inventé se confond avec un zéro mesuré, et c'est
- * exactement ce qu'on veut éviter dans une interface de trading.
+ * Un montant est toujours affiché avec sa devise. « 1 250 » ne dit pas si le
+ * portefeuille vaut mille deux cent cinquante dollars canadiens ou américains,
+ * et la différence n'est pas cosmétique.
+ *
+ * Une valeur absente s'affiche comme absente, jamais comme zéro : une position
+ * à l'équilibre et une position non évaluable ne sont pas la même chose.
  */
 
-const ABSENT = '—';
+const LOCALES: Readonly<Record<Lang, string>> = { en: 'en-CA', fr: 'fr-CA' };
 
-export function formaterMonnaie(valeur: number | null | undefined, devise = 'USD'): string {
-  if (valeur === null || valeur === undefined || Number.isNaN(valeur)) return ABSENT;
-  return new Intl.NumberFormat('fr-CA', {
+export function formatMoney(
+  value: number | null | undefined,
+  currency: Currency,
+  lang: Lang = 'en',
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat(LOCALES[lang], {
     style: 'currency',
-    currency: devise,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(valeur);
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  }).format(value);
 }
 
-export function formaterPourcentage(valeur: number | null | undefined, decimales = 2): string {
-  if (valeur === null || valeur === undefined || Number.isNaN(valeur)) return ABSENT;
-  return `${valeur >= 0 ? '+' : ''}${valeur.toFixed(decimales)} %`;
+export function formatPercent(
+  value: number | null | undefined,
+  lang: Lang = 'en',
+  digits = 2,
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  const signe = value > 0 ? '+' : '';
+  return `${signe}${new Intl.NumberFormat(LOCALES[lang], {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value)} %`;
 }
 
-export function formaterNombre(valeur: number | null | undefined, decimales = 2): string {
-  if (valeur === null || valeur === undefined || Number.isNaN(valeur)) return ABSENT;
-  return new Intl.NumberFormat('fr-CA', {
-    minimumFractionDigits: decimales,
-    maximumFractionDigits: decimales,
-  }).format(valeur);
+export function formatNumber(
+  value: number | null | undefined,
+  lang: Lang = 'en',
+  digits = 2,
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat(LOCALES[lang], {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
 }
 
-/** Classe de couleur du P&L. Neutre à zéro : le gris signale « rien encore ». */
-export function couleurPnl(valeur: number | null | undefined): string {
-  if (valeur === null || valeur === undefined || valeur === 0) return 'text-texte-attenue';
-  return valeur > 0 ? 'text-hausse' : 'text-baisse';
-}
-
-/** Convertit un numeric PostgreSQL (renvoyé en chaîne) en nombre, sans
- *  fabriquer de valeur quand la colonne est nulle. */
-export function versNombre(valeur: string | number | null | undefined): number | null {
-  if (valeur === null || valeur === undefined) return null;
-  const nombre = typeof valeur === 'number' ? valeur : Number.parseFloat(valeur);
-  return Number.isFinite(nombre) ? nombre : null;
+/** Classe de couleur d'un résultat. Le vert et le rouge sont réservés à ça. */
+export function pnlClass(value: number | null | undefined): string {
+  if (value === null || value === undefined || value === 0) return 'text-texte-doux';
+  return value > 0 ? 'text-hausse' : 'text-baisse';
 }
