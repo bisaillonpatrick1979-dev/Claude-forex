@@ -1,3 +1,5 @@
+import { AllocationSliders } from '@/components/portfolio/AllocationSliders';
+import { DerivedLimitsCard } from '@/components/portfolio/DerivedLimitsCard';
 import { Panel } from '@/components/ui/Panel';
 import { useLang, useT } from '@/i18n';
 
@@ -7,6 +9,16 @@ export function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-3">
+      <Panel title={t.config.title}>
+        <AllocationSliders />
+      </Panel>
+
+      {/* Placé juste après les réglages : on veut voir la conséquence d'un
+          curseur sans quitter l'écran où on vient de le bouger. */}
+      <Panel title={t.config.derived}>
+        <DerivedLimitsCard />
+      </Panel>
+
       <Panel title={t.settings.title}>
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm">{t.settings.language}</span>
@@ -18,9 +30,7 @@ export function SettingsPage() {
                 onClick={() => setLang(code)}
                 className={[
                   'min-h-tactile min-w-tactile rounded border px-3 text-xs uppercase',
-                  lang === code
-                    ? 'border-accent text-accent'
-                    : 'border-bordure text-texte-doux',
+                  lang === code ? 'border-accent text-accent' : 'border-bordure text-texte-doux',
                 ].join(' ')}
               >
                 {code}
