@@ -47,6 +47,8 @@ export interface ParametresAppel {
   readonly rechercheWeb?: boolean;
   readonly domainesAutorises?: readonly string[];
   readonly signal?: AbortSignal;
+  /** Diffusion du texte pendant sa production. Voir `DemandeLLM.surFragment`. */
+  readonly surFragment?: (fragment: string) => void;
 }
 
 export interface ResultatAppel extends ReponseLLM {
@@ -125,6 +127,7 @@ export async function appelerModele(parametres: ParametresAppel): Promise<Result
     rechercheWeb: parametres.rechercheWeb ?? false,
     domainesAutorises: parametres.domainesAutorises,
     signal: parametres.signal,
+    surFragment: parametres.surFragment,
   };
 
   try {

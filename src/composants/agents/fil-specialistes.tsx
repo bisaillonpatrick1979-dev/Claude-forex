@@ -284,6 +284,24 @@ function SourcesConsultees({ metadonnees }: { metadonnees: unknown }) {
   );
 }
 
+/** Trois points qui s'animent. Un texte figé ne dit pas si quelque chose
+ *  travaille encore ou si l'écran est mort. */
+function PointsSuspension() {
+  return (
+    <span aria-hidden>
+      {[0, 150, 300].map((retard) => (
+        <span
+          key={retard}
+          className="inline-block animate-pulse"
+          style={{ animationDelay: `${retard}ms` }}
+        >
+          .
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function Intervention({
   message,
   agent,
@@ -309,12 +327,32 @@ function Intervention({
         </span>
       </header>
 
-      {message.en_cours ? (
-        <p className="mt-1.5 text-sm italic text-texte-attenue">réfléchit…</p>
-      ) : (
-        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-texte">
-          {message.contenu}
+      {/* Trois états, et la distinction compte : « réfléchit » veut dire qu'on
+          attend le premier mot, « rédige » que le texte affiché est en train
+          de s'écrire, et l'absence des deux que ce qu'on lit est définitif.
+          Confondre les deux premiers ferait passer une réflexion longue pour
+          un blocage. */}
+      {message.en_cours && message.contenu.length === 0 ? (
+        <p className="mt-1.5 text-sm italic text-texte-attenue">
+          {nom} réfléchit<PointsSuspension />
         </p>
+      ) : (
+        <>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-texte">
+            {message.contenu}
+            {message.en_cours ? (
+              <span
+                aria-hidden
+                className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-accent"
+              />
+            ) : null}
+          </p>
+          {message.en_cours ? (
+            <p className="mt-1 text-xs italic text-texte-attenue">
+              {nom} rédige<PointsSuspension />
+            </p>
+          ) : null}
+        </>
       )}
 
       <SourcesConsultees metadonnees={message.metadonnees} />

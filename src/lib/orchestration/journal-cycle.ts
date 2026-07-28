@@ -96,6 +96,23 @@ export async function ouvrirMessage(entete: EnteteMessage): Promise<string | nul
   return data?.id ?? null;
 }
 
+/**
+ * Écrit le texte partiel d'un message encore en cours.
+ *
+ * Volontairement minimal : ni `resume`, ni tokens, ni coût — rien de tout cela
+ * n'est connu tant que l'appel n'est pas terminé, et écrire une valeur
+ * provisoire dans ces colonnes reviendrait à publier un chiffre faux. Seul le
+ * contenu avance ; `en_cours` reste vrai, et c'est lui qui dit à l'interface
+ * que ce qu'elle affiche n'est pas la version définitive.
+ */
+export async function ecrireFragment(
+  client: Client,
+  messageId: string,
+  contenu: string,
+): Promise<void> {
+  await client.from('messages_agents').update({ contenu }).eq('id', messageId);
+}
+
 export async function completerMessage(
   client: Client,
   messageId: string | null,

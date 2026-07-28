@@ -162,6 +162,25 @@ function corpsSelonFormat(
   }
 }
 
+/**
+ * Découpe en morceaux de la taille d'un mot, comme les rend un vrai modèle.
+ *
+ * Le séparateur reste attaché au morceau qui le précède : recoller la suite
+ * doit redonner le texte exact, espaces compris. Un mock qui perdrait un
+ * espace ferait chercher un défaut d'affichage inexistant.
+ */
+function decouper(texte: string): readonly string[] {
+  return texte.match(/\S+\s*|\s+/g) ?? [];
+}
+
+/** Assez lent pour qu'on voie écrire, assez rapide pour ne pas rallonger un
+ *  cycle complet de douze agents au-delà du raisonnable. */
+const TEMPO_FRAGMENT_MS = 12;
+
+function pause(millisecondes: number): Promise<void> {
+  return new Promise((resoudre) => setTimeout(resoudre, millisecondes));
+}
+
 export const adaptateurMock: AdaptateurLLM = {
   code: 'mock',
   nom: 'Simulation locale',
@@ -180,6 +199,17 @@ export const adaptateurMock: AdaptateurLLM = {
     );
 
     const entree = demande.systeme + demande.messages.map((message) => message.contenu).join('');
+
+    // Le mock imite aussi la *façon* dont le texte arrive, pas seulement son
+    // contenu. Sans ça, le fil en streaming ne serait jamais exerçable sans
+    // dépenser un dollar — et un défaut d'affichage ne se verrait qu'en
+    // production, sur des tokens facturés.
+    if (demande.surFragment) {
+      for (const morceau of decouper(contenu)) {
+        demande.surFragment(morceau);
+        await pause(TEMPO_FRAGMENT_MS);
+      }
+    }
 
     return {
       contenu,

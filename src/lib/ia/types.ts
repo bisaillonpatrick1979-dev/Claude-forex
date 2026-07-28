@@ -74,6 +74,17 @@ export interface DemandeLLM {
   readonly domainesAutorises?: readonly string[];
   readonly contexteDeterministe?: ContexteDeterministe | null;
   readonly signal?: AbortSignal;
+  /**
+   * Appelée à chaque morceau de texte produit, pendant la génération.
+   *
+   * Absente, l'adaptateur fait un appel classique et rend la réponse d'un
+   * bloc — c'est le comportement d'origine et il reste valable. Présente, les
+   * adaptateurs qui savent diffuser le font ; ceux qui ne savent pas
+   * l'ignorent et rendent quand même une réponse complète. Aucun appelant ne
+   * dépend donc du streaming pour obtenir un résultat : il ne change que la
+   * façon dont le texte arrive.
+   */
+  readonly surFragment?: (fragment: string) => void;
 }
 
 export interface ReponseLLM {

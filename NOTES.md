@@ -985,6 +985,78 @@ partiel.
 
 ---
 
+## Le fil s'écrit maintenant token par token
+
+Le cahier des charges (§6) demandait un fil où le message « arrive en streaming
+token par token », avec un indicateur « L'analyste technique rédige… ». La
+phase 5 avait livré le temps réel **au message** : la ligne apparaissait vide,
+puis se remplissait d'un bloc quarante secondes plus tard.
+
+### Le flux passe par la base, pas par une connexion au navigateur
+
+Un flux HTTP du serveur vers le client n'aurait servi que la personne qui a
+lancé le cycle. Or un cycle peut partir d'un cron, sans que personne ne
+regarde, et l'écran doit quand même le montrer quand on l'ouvre. La ligne
+`messages_agents` est déjà la source de vérité et Realtime la pousse à tous les
+écrans connectés : le texte partiel s'écrit donc au même endroit que le texte
+final.
+
+L'infrastructure était déjà là — `replica identity full` sur `messages_agents`,
+posée en phase 0 avec un commentaire qui disait « cas du message qui se remplit
+token par token ». Il ne manquait que le producteur.
+
+### Une écriture par token saturerait Realtime pour rien
+
+`redacteurProgressif` n'écrit que lorsque **deux** conditions sont réunies :
+400 ms écoulées et 24 caractères nouveaux. Un modèle lent n'écrit pas pour
+trois caractères ; un modèle rapide n'écrit pas trente fois par seconde. L'œil
+ne fait pas la différence, la facture en WAL si.
+
+### La course qu'il fallait fermer, et qui justifie le module
+
+Une écriture partielle lancée juste avant la fin de l'appel peut se terminer
+**après** l'écriture du message complet — et le remplacer par un fragment. Le
+message resterait tronqué pour toujours, sans erreur nulle part, et le défaut
+serait intermittent : il ne se produit que quand la dernière écriture est plus
+lente que la fin de la génération.
+
+`cloturer()` ferme le rédacteur — plus aucune écriture ne part — et attend
+celle qui est en vol. Le cycle n'écrit le contenu définitif qu'après, y compris
+sur le chemin d'erreur. C'est la raison d'être du module ; le reste n'est que
+cadence, et c'est le comportement que les tests couvrent en priorité.
+
+Deuxième garde-fou : jamais deux écritures en parallèle. Sous une écriture
+lente, les empiler les ferait arriver dans le désordre et un fragment ancien
+écraserait un fragment récent.
+
+### Le streaming est optionnel, agent par agent
+
+`DemandeLLM.surFragment` est facultatif. Absent, l'adaptateur fait un appel
+classique — c'est le comportement d'origine et il reste valable. Présent, les
+adaptateurs qui savent diffuser le font ; les autres l'ignorent et rendent
+quand même une réponse complète. Aucun appelant ne dépend du streaming pour
+obtenir un résultat.
+
+Livré sur Anthropic (`messages.stream()` + événement `text` + `finalMessage()`,
+vérifié contre la documentation à jour) et sur `mock`, qui imite aussi la
+*façon* dont le texte arrive. Sans ce dernier, le fil en streaming ne serait
+pas exerçable sans dépenser un dollar, et un défaut d'affichage ne se verrait
+qu'en production sur des tokens facturés.
+
+Bénéfice qui ne se voit pas à l'écran : au-delà d'environ 16 000 tokens de
+sortie, un appel non diffusé risque d'expirer côté HTTP. Nos agents sont
+réglables jusqu'à 64 000.
+
+### Trois états à l'écran, pas deux
+
+« Réfléchit » signifie qu'on attend le premier mot ; « rédige » que le texte
+affiché est en train de s'écrire ; l'absence des deux que ce qu'on lit est
+définitif. Confondre les deux premiers ferait passer une réflexion longue pour
+un blocage — c'est précisément ce que l'ancien « réfléchit… » figé donnait à
+voir.
+
+---
+
 ## Vérification de l'état déployé (28 juillet 2026)
 
 Audit du projet Supabase en regard du dépôt, et non du seul dépôt : le code

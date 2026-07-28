@@ -130,7 +130,7 @@ export const adaptateurAnthropic: AdaptateurLLM = {
     }
 
     try {
-      const reponse = await client.messages.create(parametres, { signal: demande.signal });
+      const reponse = await produire(client, parametres, demande);
 
       // Un refus des classificateurs de sécurité arrive en HTTP 200 avec un
       // contenu vide. Sans ce contrôle, l'extraction JSON échouerait sur
@@ -157,6 +157,40 @@ export const adaptateurAnthropic: AdaptateurLLM = {
     }
   },
 };
+
+/**
+ * Un appel, deux façons d'obtenir la même réponse.
+ *
+ * Sans `surFragment`, on garde l'appel classique : rien à gagner à diffuser un
+ * texte que personne ne regarde arriver.
+ *
+ * Avec, on passe par `messages.stream()`. L'événement `text` du SDK ne donne
+ * que le delta — c'est exactement ce qu'attend le rédacteur progressif, et
+ * c'est pour ça qu'on ne filtre pas `content_block_delta` à la main.
+ * `finalMessage()` rend ensuite le message complet, avec `usage` et
+ * `stop_reason` : le reste de l'adaptateur ne voit aucune différence.
+ *
+ * Bénéfice qui ne se voit pas à l'écran : au-delà d'environ 16 000 tokens de
+ * sortie, un appel non diffusé risque d'expirer côté HTTP. Nos agents montent
+ * à 64 000. Le streaming écarte ce plafond en même temps qu'il rend le fil
+ * vivant.
+ */
+async function produire(
+  client: Anthropic,
+  parametres: Anthropic.Messages.MessageCreateParamsNonStreaming,
+  demande: DemandeLLM,
+): Promise<Anthropic.Messages.Message> {
+  if (!demande.surFragment) {
+    return client.messages.create(
+      parametres as Anthropic.Messages.MessageCreateParamsNonStreaming,
+      { signal: demande.signal },
+    );
+  }
+
+  const flux = client.messages.stream(parametres, { signal: demande.signal });
+  flux.on('text', (delta) => demande.surFragment?.(delta));
+  return flux.finalMessage();
+}
 
 /** Traduit les exceptions typées du SDK en une erreur que l'orchestrateur
  *  sait interpréter, sans jamais recopier la clé dans le message. */

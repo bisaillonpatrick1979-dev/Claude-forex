@@ -26,6 +26,7 @@ import { construireInstantane, rendreInstantane } from './instantane';
 import {
   chargerAgents,
   completerMessage,
+  ecrireFragment,
   majEtatCycle,
   messageSysteme,
   ouvrirMessage,
@@ -37,6 +38,7 @@ import {
   messagePortefeuille,
   resumerPourSuite,
 } from './invites';
+import { redacteurProgressif } from './redaction';
 import { reflechirSurPositionsFermees } from './reflexion';
 import {
   CONSIGNE_RECHERCHE,
@@ -404,11 +406,21 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
       tour,
     });
 
+    // Le fil se remplit pendant que l'agent écrit, pas à la fin. Sans
+    // `messageId`, l'insertion a échoué : on laisse l'appel se faire quand même
+    // — perdre l'affichage vaut mieux que perdre la décision.
+    const redacteur = messageId
+      ? redacteurProgressif({
+          ecrire: (texte) => ecrireFragment(client, messageId, texte),
+        })
+      : null;
+
     try {
       const appel = await appelerModele({
         client,
         profilId,
         cycleId: cycle.id,
+        surFragment: redacteur ? (fragment) => redacteur.pousser(fragment) : undefined,
         agent: {
           id: agent.id,
           fournisseur: agent.fournisseur,
@@ -435,6 +447,10 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
       });
 
       compteur.enregistrer(appel);
+      // Avant d'écrire le texte définitif : une écriture partielle encore en
+      // vol le remplacerait par un fragment, et le message resterait tronqué
+      // pour toujours sans qu'aucune erreur ne le signale.
+      await redacteur?.cloturer();
       await completerMessage(client, messageId, appel.contenu, appel, {
         fournisseur: agent.fournisseur,
         modele: appel.modele,
@@ -452,6 +468,7 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
           : erreur instanceof Error
             ? erreur.message
             : 'Erreur inconnue.';
+      await redacteur?.cloturer();
       await completerMessage(client, messageId, `⚠ Appel impossible : ${message}`, null, {
         echec: true,
       });
