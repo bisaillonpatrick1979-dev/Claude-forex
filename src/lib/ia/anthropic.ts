@@ -115,22 +115,29 @@ export const adaptateurAnthropic: AdaptateurLLM = {
       parametres.output_config = { effort: demande.effort };
     }
 
-    if (demande.rechercheWeb && MODELES_AVEC_RECHERCHE.includes(demande.modele)) {
-      const restriction =
-        demande.domainesAutorises && demande.domainesAutorises.length > 0
-          ? { allowed_domains: [...demande.domainesAutorises] }
-          : {};
-
-      // `max_uses` borne la dépense : sans plafond, un agent peut enchaîner
-      // quinze recherches sur une question qui en méritait deux.
-      parametres.tools = [
-        { type: 'web_search_20260209', name: 'web_search', max_uses: 5, ...restriction },
-        { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3, ...restriction },
-      ] as Anthropic.Messages.MessageCreateParams['tools'];
+    const avecRecherche = demande.rechercheWeb && MODELES_AVEC_RECHERCHE.includes(demande.modele);
+    if (avecRecherche) {
+      parametres.tools = outilsWeb(demande.domainesAutorises ?? []);
     }
 
     try {
-      const reponse = await produire(client, parametres, demande);
+      let reponse: Anthropic.Messages.Message;
+      try {
+        reponse = await produire(client, parametres, demande);
+      } catch (erreur) {
+        // Un domaine hors de portée de l'agent de recherche fait échouer
+        // l'appel entier par un 400 — pas la seule recherche. La liste des
+        // domaines fautifs est dans le message : on la retire et on réessaie
+        // une fois, plutôt que de perdre l'analyse pour une source morte.
+        const refuses = avecRecherche ? domainesRefuses(erreur) : [];
+        if (refuses.length === 0) throw erreur;
+
+        const restants = (demande.domainesAutorises ?? []).filter(
+          (domaine) => !refuses.includes(domaine),
+        );
+        parametres.tools = outilsWeb(restants);
+        reponse = await produire(client, parametres, demande);
+      }
 
       // Un refus des classificateurs de sécurité arrive en HTTP 200 avec un
       // contenu vide. Sans ce contrôle, l'extraction JSON échouerait sur
@@ -157,6 +164,50 @@ export const adaptateurAnthropic: AdaptateurLLM = {
     }
   },
 };
+
+/**
+ * Outils web, restreints aux domaines demandés.
+ *
+ * `max_uses` borne la dépense : sans plafond, un agent peut enchaîner quinze
+ * recherches sur une question qui en méritait deux. Une liste vide lève la
+ * restriction plutôt que d'interdire tout — un analyste sans domaine autorisé
+ * n'aurait aucune raison d'avoir reçu l'outil.
+ */
+function outilsWeb(domaines: readonly string[]): Anthropic.Messages.MessageCreateParams['tools'] {
+  const restriction = domaines.length > 0 ? { allowed_domains: [...domaines] } : {};
+
+  return [
+    { type: 'web_search_20260209', name: 'web_search', max_uses: 5, ...restriction },
+    { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3, ...restriction },
+  ] as Anthropic.Messages.MessageCreateParams['tools'];
+}
+
+/**
+ * Domaines qu'Anthropic déclare hors de portée, extraits de son message
+ * d'erreur.
+ *
+ * Forme observée : « The following domains are not accessible to our user
+ * agent: ['ft.com', 'reuters.com'] ». Lire un message d'erreur est fragile, et
+ * c'est assumé : l'échec de la lecture rend une liste vide, l'erreur d'origine
+ * remonte alors telle quelle, et on est exactement dans l'état d'avant. Le
+ * gain — trois analystes sur douze qui continuent de travailler quand un
+ * éditeur ferme sa porte — vaut ce risque-là.
+ *
+ * Exporté pour être testé : la seule façon de vérifier une analyse de texte
+ * est de lui donner du texte.
+ */
+export function domainesRefuses(erreur: unknown): readonly string[] {
+  const message = erreur instanceof Error ? erreur.message : String(erreur);
+  if (!message.includes('not accessible to our user agent')) return [];
+
+  const liste = /not accessible to our user agent:\s*\[([^\]]*)\]/.exec(message);
+  if (!liste?.[1]) return [];
+
+  return liste[1]
+    .split(',')
+    .map((brut) => brut.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((domaine) => domaine.length > 0);
+}
 
 /**
  * Un appel, deux façons d'obtenir la même réponse.

@@ -21,7 +21,34 @@ type RoleAgent = Database['public']['Enums']['role_agent'];
  * vidéo, dont la qualité ne se vérifie pas depuis un domaine.
  *
  * Modifiable : c'est une liste de départ défendable, pas un jugement définitif.
+ *
+ * ═══ Un domaine inaccessible tue l'analyse entière ═══
+ *
+ * L'outil de recherche d'Anthropic refuse la requête par un **400** dès qu'un
+ * seul domaine de `allowed_domains` est hors de portée de son agent — il ne
+ * l'ignore pas. Constaté en production : les cinq éditeurs ci-dessous ont mis
+ * en échec les trois analystes qui ont accès au web, à *chaque* cycle, pendant
+ * que les neuf autres agents travaillaient normalement. Le cycle rendait quand
+ * même une décision, donc rien n'avait l'air cassé : le débat se tenait
+ * simplement sans macro, sans fondamental et sans sentiment.
+ *
+ * Ces cinq-là sont donc retirés. Ils restent nommés ici plutôt que supprimés
+ * en silence, pour qu'on sache que c'est un constat et non un oubli — et pour
+ * qu'on puisse les réessayer si Anthropic élargit son accès.
  */
+
+/**
+ * Éditeurs que l'agent de recherche d'Anthropic ne peut pas atteindre
+ * (constaté le 28 juillet 2026). Presque tous sont sous péage ou refusent les
+ * robots. Aucune valeur ici ne doit apparaître dans les listes ci-dessous.
+ */
+export const DOMAINES_INACCESSIBLES: readonly string[] = [
+  'apnews.com',
+  'ft.com',
+  'marketwatch.com',
+  'reuters.com',
+  'wsj.com',
+];
 
 /** Sources institutionnelles et de presse financière. */
 export const DOMAINES_MACRO: readonly string[] = [
@@ -41,13 +68,8 @@ export const DOMAINES_MACRO: readonly string[] = [
   'ec.europa.eu',
   'statcan.gc.ca',
   // Presse financière et agences
-  'reuters.com',
-  'apnews.com',
   'bloomberg.com',
-  'ft.com',
-  'wsj.com',
   'cnbc.com',
-  'marketwatch.com',
   // Calendriers économiques
   'forexfactory.com',
   'investing.com',
@@ -61,21 +83,14 @@ export const DOMAINES_FONDAMENTAL: readonly string[] = [
   'nasdaq.com',
   'nyse.com',
   'investor.gov',
-  'reuters.com',
   'bloomberg.com',
   'cnbc.com',
-  'marketwatch.com',
   'finance.yahoo.com',
-  'ft.com',
-  'wsj.com',
 ];
 
 /** Sources pour le ton de marché et le flux de nouvelles. */
 export const DOMAINES_SENTIMENT: readonly string[] = [
-  'reuters.com',
-  'apnews.com',
   'cnbc.com',
-  'marketwatch.com',
   'fxstreet.com',
   'investing.com',
   'bloomberg.com',
