@@ -985,6 +985,74 @@ partiel.
 
 ---
 
+## Vérification de l'état déployé (28 juillet 2026)
+
+Audit du projet Supabase en regard du dépôt, et non du seul dépôt : le code
+peut être juste pendant que l'installation ne l'est pas. Trois écarts trouvés,
+tous corrigés.
+
+### Un rejeu abandonné tenait toute la firme en août 2011
+
+`portefeuilles.rejeu_actif` valait `true`, curseur au **5 août 2011**, source
+`SIMULE`, sur AUDUSD M5. Un rejeu lancé puis quitté sans être mené à son terme
+ne se referme pas tout seul : la salle des marchés restait donc branchée sur
+une série inventée vieille de quinze ans, pendant que le propriétaire croyait
+regarder le marché.
+
+Rien ne signalait l'anomalie parce que rien n'était en panne — les cycles
+tournaient, les chiffres s'affichaient, les agents délibéraient. Sur des prix
+fabriqués.
+
+Corrigé en base. La leçon de conception, elle, reste ouverte : un rejeu devrait
+avoir une date de péremption, ou la salle des marchés devrait refuser d'afficher
+un curseur distant de plus de quelques jours sans le dire en évidence.
+
+### Seul `mock` était allumé
+
+Twelve Data et Yahoo étaient désactivés, `mock` actif et seul candidat. Les
+priorités par classe d'actifs étaient pourtant déjà correctes (Twelve Data 1 en
+FOREX, Yahoo 3, `mock` 9) : il ne manquait que les drapeaux.
+
+Les deux fournisseurs réels sont rallumés. `mock` reste actif en dernier
+recours, priorité 9 — il ne sera choisi que si les deux autres sont épuisés ou
+muets, et `natureFournisseur` le marque `SIMULE` dans l'interface. Les treize
+symboles actifs ont une correspondance chez les deux fournisseurs : aucun ne
+retombera silencieusement sur la simulation faute de traduction.
+
+### Le surveillant d'alertes ignorait le drapeau `actif`
+
+La fonction Edge appelle Twelve Data en direct, sans passer par le routeur.
+Elle ne lisait donc pas `fournisseurs_donnees.actif` : éteindre Twelve Data
+dans Réglages arrêtait l'application, pas le surveillant, qui continuait de
+consommer le quota à raison d'un appel par minute pour un fournisseur mis de
+côté. Le drapeau est maintenant relu à chaque passage (fonction v6).
+
+### Deux fonctions de déclencheur exposées en RPC
+
+`initialiser_permissions_agent` et `journaliser_permission_agent` sont
+`SECURITY DEFINER` et restaient appelables par PostgREST — la première par
+`anon`, c'est-à-dire sans être connecté. Aucune exploitation possible en
+pratique (elles lisent `new`, nul hors trigger, et échouent), mais une fonction
+privilégiée exposée sans raison se retire au lieu de se surveiller. `revoke
+execute`, comme pour `initialiser_profil` en phase 0.
+
+Restent au tableau du linter, **volontairement** : les cinq fonctions
+`SECURITY DEFINER` que l'application appelle vraiment (kill switch, recherche
+vectorielle, réinitialisation), qui vérifient le `profil_id` elles-mêmes, et
+`cles_api` dont l'absence de politique RLS *est* la politique — aucun rôle
+client ne doit la lire.
+
+### Ce que l'audit a confirmé au passage
+
+La troncature des champs descriptifs fonctionne en production : les deux
+derniers cycles échoués portaient `Sortie non conforme — horizon : Invalid
+input`, et tous les cycles postérieurs au correctif sont `TERMINE`.
+
+À faire côté console Supabase, hors SQL : activer la protection contre les mots
+de passe compromis (Auth → Passwords).
+
+---
+
 ## Décisions d'interface (tablette et densité)
 
 ### Le mode « cockpit » dépend de la hauteur, pas seulement de la largeur

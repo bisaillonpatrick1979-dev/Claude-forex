@@ -41,6 +41,10 @@
  * atomique que le reste de l'application. La cadence rend le refus rare ; c'est
  * la réservation qui garantit.
  *
+ * Le drapeau `actif` du fournisseur est relu à chaque passage : éteindre Twelve
+ * Data dans Réglages doit arrêter cette fonction aussi, sans quoi le quota
+ * continue de fondre pour un fournisseur que l'application n'utilise plus.
+ *
  * La logique est reproduite et testée dans `src/lib/alertes/`. Deno ne partage
  * pas le graphe de modules de Next : duplication assumée, tenue honnête par les
  * tests du côté applicatif.
@@ -126,6 +130,30 @@ async function chargerCorrespondances(
   return table;
 }
 
+/**
+ * Profils pour lesquels le fournisseur est encore allumé.
+ *
+ * Le surveillant appelle Twelve Data en direct, sans passer par le routeur —
+ * il tourne dans Deno, loin du code applicatif. Il n'héritait donc de rien : un
+ * propriétaire qui éteignait Twelve Data dans Réglages voyait son quota
+ * continuer de fondre à raison d'un appel par minute, pour un fournisseur que
+ * l'application avait cessé d'utiliser partout ailleurs.
+ *
+ * Le drapeau `actif` est une décision du propriétaire, pas un détail de
+ * routage : on le relit ici pour que « éteint » veuille dire éteint.
+ */
+async function chargerProfilsActifs(
+  supabase: ReturnType<typeof createClient>,
+): Promise<Set<string>> {
+  const { data } = await supabase
+    .from('fournisseurs_donnees')
+    .select('profil_id')
+    .eq('code', FOURNISSEUR)
+    .eq('actif', true);
+
+  return new Set(((data ?? []) as { profil_id: string }[]).map((ligne) => ligne.profil_id));
+}
+
 async function recupererPrix(symbole: string, cle: string): Promise<number | null> {
   const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbole)}&apikey=${cle}`;
 
@@ -192,13 +220,21 @@ Deno.serve(async () => {
     return json({ surveillees: toutes.length, observes: 0, declenchees: 0, motif: 'aucune échéance' });
   }
 
-  const correspondances = await chargerCorrespondances(supabase);
+  const [correspondances, profilsActifs] = await Promise.all([
+    chargerCorrespondances(supabase),
+    chargerProfilsActifs(supabase),
+  ]);
 
   const prixParCle = new Map<string, number>();
   const refus: string[] = [];
 
   for (const cle of symbolesDus) {
     const [profilId, symbole] = cle.split('|');
+
+    if (!profilsActifs.has(profilId!)) {
+      refus.push(`${symbole} : Twelve Data est désactivé dans les réglages de ce profil.`);
+      continue;
+    }
 
     // Sans correspondance connue, on tente le code tel quel : une alerte posée
     // directement avec le code du fournisseur doit continuer de fonctionner.
