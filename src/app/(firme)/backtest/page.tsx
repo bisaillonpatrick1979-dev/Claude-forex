@@ -6,6 +6,7 @@ import { EtatVide, Panneau } from '@/composants/ui/panneau';
 import { clientServeur } from '@/lib/supabase/serveur';
 
 import { ConsoleBacktest, type OptionSymbole } from './console';
+import { ImportHistorique } from './import';
 
 export const metadata = { title: 'Backtest — Trading Floor IA' };
 
@@ -42,6 +43,16 @@ export default async function PageBacktest() {
       <div className="mb-3">
         <ConsoleBacktest symboles={options} historique={historique} />
       </div>
+
+      <Panneau titre="Importer un historique" className="mb-3">
+        <ImportHistorique symboles={options.map((option) => option.code)} />
+        <p className="mt-3 text-xs leading-relaxed text-texte-attenue">
+          Le palier gratuit d’un fournisseur ne donne pas quinze ans d’historique, et les bougies
+          simulées ne donneront jamais de vrais mouvements. Un fichier téléchargé une fois — chez
+          Twelve Data, chez un courtier, chez Dukascopy — apporte la profondeur nécessaire sans
+          consommer un seul appel, et pour de bon.
+        </p>
+      </Panneau>
 
       {(backtests ?? []).length === 0 ? (
         <Panneau className="min-h-56">

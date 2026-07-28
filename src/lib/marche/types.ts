@@ -3,6 +3,17 @@ import type { Database } from '@/types/base-de-donnees';
 export type Intervalle = Database['public']['Enums']['intervalle'];
 export type ClasseActif = Database['public']['Enums']['classe_actif'];
 
+/**
+ * Source d'un historique importé depuis un fichier.
+ *
+ * Ce n'est pas un adaptateur : rien n'est appelé, l'utilisateur fournit le
+ * fichier. Le code existe quand même pour que la provenance reste lisible dans
+ * la table des bougies — un historique importé n'est ni simulé, ni constaté par
+ * un fournisseur en ligne, et confondre les trois rendrait impossible de savoir
+ * sur quoi un backtest a tourné.
+ */
+export const FOURNISSEUR_IMPORT = 'import';
+
 /** Codes des adaptateurs. Doit rester aligné sur fournisseurs_donnees.code. */
 export const CODES_FOURNISSEURS = [
   'mock',
@@ -33,7 +44,9 @@ export function estCodeFournisseur(valeur: string): valeur is CodeFournisseur {
  */
 export type NatureSerie = 'SIMULE' | 'REEL';
 
-export function natureFournisseur(code: CodeFournisseur): NatureSerie {
+export function natureFournisseur(code: CodeFournisseur | typeof FOURNISSEUR_IMPORT): NatureSerie {
+  // Un historique importé décrit des mouvements qui ont eu lieu : il compte
+  // comme réel, et se recolle donc sans dommage à ce qu'un fournisseur rapporte.
   return code === 'mock' ? 'SIMULE' : 'REEL';
 }
 
