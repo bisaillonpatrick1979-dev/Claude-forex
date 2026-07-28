@@ -189,39 +189,52 @@ export function FilSpecialistes({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className="flex shrink-0 items-center gap-2">
+      {/* Une seule ligne de commandes. Tout ce qui n'est pas une analyse
+          d'agent prend de la place sur les analyses d'agents. */}
+      <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
           onClick={lancer}
           disabled={enCours}
-          className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-fond transition hover:opacity-90 disabled:opacity-50"
+          title={`Réunir les agents sur ${symbole}`}
+          className="flex-1 truncate rounded bg-accent px-2 py-1 text-xs font-medium text-fond transition hover:opacity-90 disabled:opacity-50"
         >
-          {enCours ? 'Cycle en cours…' : `Réunir les agents sur ${symbole}`}
+          {enCours ? 'Cycle en cours…' : `Réunir sur ${symbole}`}
         </button>
         <button
           type="button"
           onClick={debriefer}
           disabled={enCours}
           title="Faire débriefer les positions fermées par l’agent de réflexion"
-          className="rounded border border-bordure-vive px-2 py-1.5 text-xs transition hover:border-accent disabled:opacity-50"
+          className="shrink-0 rounded border border-bordure-vive px-2 py-1 text-xs transition hover:border-accent disabled:opacity-50"
         >
           Débriefer
         </button>
         {etatCycle ? (
-          <span className="chiffre ml-auto text-[0.72rem] uppercase tracking-wider text-texte-attenue">
+          <span className="chiffre shrink-0 text-[0.68rem] uppercase tracking-wider text-texte-attenue">
             {LIBELLES_ETAPES[etatCycle] ?? etatCycle}
           </span>
         ) : null}
       </div>
 
       {blocage ? (
-        <p className="shrink-0 rounded border border-alerte/40 bg-alerte/10 px-2 py-1 text-xs text-alerte">
+        <p
+          className="shrink-0 rounded border border-alerte/40 bg-alerte/10 px-2 py-1 text-[0.7rem] leading-snug text-alerte"
+          title={blocage}
+        >
           {blocage}
         </p>
       ) : null}
 
+      {/* Le compte rendu du dernier cycle tient sur deux lignes au plus. Il
+          disait « aucun ordre en attente ni position ouverte à traiter » sur
+          quatre lignes, au-dessus des analyses qu'on venait lire. */}
       {retour ? (
-        <p className="shrink-0 rounded border border-bordure bg-panneau-clair px-2 py-1 text-xs text-texte-attenue">
+        <p
+          className="shrink-0 overflow-hidden rounded border border-bordure bg-panneau-clair px-2 py-1 text-[0.7rem] leading-snug text-texte-attenue"
+          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+          title={retour}
+        >
           {retour}
         </p>
       ) : null}

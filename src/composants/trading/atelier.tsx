@@ -55,6 +55,10 @@ export function Atelier({
   const [symbole, setSymbole] = useState(symboles[0]?.code ?? 'EURUSD');
   const [intervalle, setIntervalle] = useState<Intervalle>('M5');
   const [dernierPrix, setDernierPrix] = useState<number | null>(null);
+  // Le fil partage la rangée avec le graphique. Lire une délibération de
+  // quatre cents mots dans un quart d'écran est pénible : on peut lui donner
+  // toute la largeur le temps de la lire, et revenir d'un clic.
+  const [filAgrandi, setFilAgrandi] = useState(false);
 
   const surDernierPrix = useCallback((prix: number | null) => setDernierPrix(prix), []);
 
@@ -83,11 +87,19 @@ export function Atelier({
       {/* `items-start` : chaque panneau garde la hauteur qu'il s'est donnée.
           Sans lui, une grille étire ses éléments sur le plus haut, et un
           contenu qui dépasse sa boîte se retrouve à recouvrir le voisin. */}
-      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+      <div
+        className={`grid items-start gap-3 ${
+          filAgrandi ? '' : 'xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]'
+        }`}
+      >
         {/* Trois quarts de la largeur, et une hauteur qui suit l'écran plutôt
             qu'un plafond fixe : sur un grand moniteur le graphique respire,
             sur un portable il garde un plancher lisible. */}
-        <section className="flex h-[68vh] min-h-[26rem] flex-col overflow-hidden rounded-lg border border-bordure bg-panneau">
+        <section
+          className={`flex h-[68vh] min-h-[26rem] flex-col overflow-hidden rounded-lg border border-bordure bg-panneau ${
+            filAgrandi ? 'hidden' : ''
+          }`}
+        >
           <ZoneGraphique
             symboles={symboles}
             marqueurs={marqueurs}
@@ -113,6 +125,15 @@ export function Atelier({
           titre="Fil des spécialistes"
           corpsDefilant
           className="h-[24rem] xl:h-[68vh]"
+          action={
+            <button
+              type="button"
+              onClick={() => setFilAgrandi((precedent) => !precedent)}
+              className="hidden rounded border border-bordure px-1.5 py-0.5 text-[0.68rem] uppercase tracking-wider text-texte-attenue transition-colors hover:text-texte xl:inline-block"
+            >
+              {filAgrandi ? 'Réduire' : 'Agrandir'}
+            </button>
+          }
         >
           <FilSpecialistes
             profilId={profilId}

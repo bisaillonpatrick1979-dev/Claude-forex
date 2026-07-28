@@ -40,12 +40,44 @@ function decoupeAccolades(texte: string): string | null {
   return debut >= 0 && fin > debut ? texte.slice(debut, fin + 1) : null;
 }
 
+/**
+ * Champ de texte descriptif : on tronque, on ne rejette pas.
+ *
+ * Constaté en production : un plafond de soixante caractères sur `horizon`
+ * faisait jeter des analyses complètes parce que le modèle avait écrit
+ * « scalping (aucune position — attente du prochain signal valide) », soit
+ * soixante-deux. Une étiquette de deux caractères de trop annulait un
+ * raisonnement de quatre cents mots, et l'écran affichait « vue de marché
+ * illisible » — l'utilisateur n'y voyait qu'une IA muette.
+ *
+ * La règle qui en découle : ce qui est **structurel** est rejeté quand il est
+ * faux — un sens, un stop, une quantité doivent être exacts ou l'ordre ne part
+ * pas. Ce qui est **descriptif** est tronqué : sa longueur n'engage rien.
+ *
+ * Un nombre est accepté et converti : « horizon : 4 » est une réponse
+ * raisonnable à une question qui n'impose pas de format.
+ */
+function texteBorne(maximum: number) {
+  return z.preprocess((valeur) => {
+    if (valeur === null || valeur === undefined) return valeur;
+    const texte =
+      typeof valeur === 'string'
+        ? valeur
+        : typeof valeur === 'number' || typeof valeur === 'boolean'
+          ? String(valeur)
+          : Array.isArray(valeur)
+            ? valeur.map((element) => String(element)).join(', ')
+            : valeur;
+    return typeof texte === 'string' ? texte.slice(0, maximum) : texte;
+  }, z.string().max(maximum));
+}
+
 export const schemaVueMarche = z.object({
   direction: z.enum(['HAUSSIER', 'BAISSIER', 'NEUTRE']),
   conviction: z.coerce.number().min(0).max(100),
-  horizon: z.string().max(60).nullable().optional(),
+  horizon: texteBorne(60).nullable().optional(),
   niveau_invalidation: z.coerce.number().positive().nullable().optional(),
-  resume: z.string().min(1).max(4000),
+  resume: texteBorne(4000).refine((texte) => texte.length > 0, 'Résumé vide.'),
 });
 
 export type VueMarche = z.infer<typeof schemaVueMarche>;

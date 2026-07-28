@@ -139,72 +139,90 @@ export function PiloteAutomatique({
     setActif((precedent) => !precedent);
   }, []);
 
+  const [replie, setReplie] = useState(true);
+
   return (
-    <div className="flex flex-col gap-2 border-t border-bordure pt-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
+    // Compact par défaut. Ce panneau partage sa hauteur avec le fil des agents,
+    // et c'est le fil qu'on vient lire : les réglages de la veille ne doivent
+    // pas manger l'espace de ce qu'ils produisent. Une ligne d'état, un bouton,
+    // et le reste replié — dépliable quand on veut vraiment y toucher.
+    <div className="flex shrink-0 flex-col gap-1.5 border-t border-bordure pt-2 text-sm">
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           onClick={basculer}
-          className={`flex-1 rounded px-3 py-2 text-xs font-medium transition ${
+          className={`flex-1 rounded px-2 py-1 text-xs font-medium transition ${
             actif
               ? 'border border-alerte/50 bg-alerte/10 text-alerte hover:bg-alerte/20'
               : 'bg-accent text-fond hover:opacity-90'
           }`}
         >
-          {actif ? 'Arrêter la veille continue' : 'Veille continue'}
+          {actif ? 'Arrêter la veille' : 'Veille continue'}
         </button>
 
-        <select
-          aria-label="Fréquence de vérification"
-          value={cadence}
-          onChange={(evenement) => setCadence(Number(evenement.target.value))}
-          className="rounded border border-bordure bg-panneau-clair px-2 py-2 text-xs"
+        {actif ? (
+          <span className="flex items-center gap-1 text-[0.7rem] text-texte-attenue">
+            <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-hausse" />
+            {cycles > 0 ? `${cycles} cycle${cycles > 1 ? 's' : ''}` : 'en écoute'}
+          </span>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => setReplie((precedent) => !precedent)}
+          title="Réglages de la veille"
+          aria-expanded={!replie}
+          className="rounded border border-bordure px-1.5 py-1 text-[0.7rem] text-texte-attenue transition-colors hover:text-texte"
         >
-          {CADENCES.map((option, index) => (
-            <option key={option.libelle} value={index}>
-              {option.libelle}
-            </option>
-          ))}
-        </select>
+          {replie ? '⋯' : '×'}
+        </button>
       </div>
 
-      <label className="flex items-center gap-2 text-xs text-texte-attenue">
-        <input
-          type="checkbox"
-          checked={surveilleTout}
-          onChange={(evenement) => setSurveilleTout(evenement.target.checked)}
-          className="h-4 w-4 accent-[var(--color-accent)]"
-        />
-        Surveiller tous les instruments autorisés
-        {instruments.length > 0 ? ` (${instruments.length})` : ''}
-        {!surveilleTout ? ` — seulement ${symbole}` : ''}
-      </label>
-
-      {actif ? (
-        <p className="flex items-center gap-1.5 text-xs text-texte-attenue">
-          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-hausse" />
-          Les agents surveillent{' '}
-          {surveilleTout && instruments.length > 0
-            ? `${instruments.length} instrument(s)`
-            : symbole}{' '}
-          en {intervalle}, un à la fois par tour. Ils délibèrent à chaque nouvelle bougie fermée —
-          au plus une fois par bougie, pour ne pas refacturer la même analyse.
-        </p>
-      ) : (
-        <p className="text-xs text-texte-attenue">
-          En veille continue, les agents analysent d’eux-mêmes à chaque bougie fermée. La boucle
-          vit dans cet onglet : le fermer empêche le tour suivant, mais n’interrompt pas le cycle
-          déjà parti — il va au bout côté serveur. Pour tout arrêter depuis n’importe où, utiliser
-          le kill switch.
-        </p>
-      )}
-
+      {/* L'état tient sur une ligne, tronqué. Le message complet reste
+          accessible au survol : une erreur de cycle ne doit pas s'étaler sur
+          quatre lignes au détriment des analyses. */}
       {etat ? (
-        <p className="chiffre text-[0.72rem] text-texte-attenue/70">
-          {cycles > 0 ? `${cycles} cycle(s) · ` : ''}
+        <p className="chiffre truncate text-[0.68rem] text-texte-attenue/70" title={etat}>
           {dernierTour ? `${new Date(dernierTour).toLocaleTimeString('fr-CA')} · ` : ''}
           {etat}
         </p>
+      ) : null}
+
+      {!replie ? (
+        <div className="flex flex-col gap-1.5 rounded border border-bordure/60 p-2">
+          <label className="flex items-center gap-2 text-[0.7rem] text-texte-attenue">
+            <span className="shrink-0">Vérifier</span>
+            <select
+              aria-label="Fréquence de vérification"
+              value={cadence}
+              onChange={(evenement) => setCadence(Number(evenement.target.value))}
+              className="rounded border border-bordure bg-panneau-clair px-1.5 py-1 text-[0.7rem]"
+            >
+              {CADENCES.map((option, index) => (
+                <option key={option.libelle} value={index}>
+                  {option.libelle}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center gap-2 text-[0.7rem] text-texte-attenue">
+            <input
+              type="checkbox"
+              checked={surveilleTout}
+              onChange={(evenement) => setSurveilleTout(evenement.target.checked)}
+              className="h-3.5 w-3.5 accent-[var(--color-accent)]"
+            />
+            Tous les instruments autorisés
+            {instruments.length > 0 ? ` (${instruments.length})` : ''}
+          </label>
+
+          <p className="text-[0.68rem] leading-snug text-texte-attenue/80">
+            Les agents délibèrent à chaque nouvelle bougie fermée, une seule fois par bougie —
+            relancer la même analyse la referait payer. La boucle vit dans cet onglet ; le fermer
+            empêche le tour suivant, sans interrompre le cycle déjà parti.
+          </p>
+        </div>
       ) : null}
     </div>
   );
