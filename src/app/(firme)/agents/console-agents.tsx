@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import {
   basculerAgent,
   basculerDroit,
+  definirModeleAgent,
   definirNiveauAutonomie,
   definirPerimetre,
   enregistrerLimites,
@@ -17,6 +18,13 @@ import {
 } from '@/app/actions/agents';
 import { DESCRIPTIONS_NIVEAUX, LIBELLES_ROLES } from '@/lib/agents/niveaux';
 import type { NiveauAutonomie, RoleAgent } from '@/lib/agents/niveaux';
+import {
+  MODELES_PAR_FOURNISSEUR,
+  accepteEffort,
+  accepteTemperature,
+  tarif,
+} from '@/lib/ia/tarifs';
+import { NIVEAUX_EFFORT, type FournisseurLLM, type NiveauEffort } from '@/lib/ia/types';
 import { Panneau } from '@/composants/ui/panneau';
 
 /**
@@ -35,8 +43,11 @@ export interface AgentAffiche {
   readonly role: RoleAgent;
   readonly couleur: string;
   readonly actif: boolean;
-  readonly fournisseur: string;
+  readonly fournisseur: FournisseurLLM;
   readonly modele: string;
+  readonly temperature: number;
+  readonly tokensMax: number;
+  readonly effort: NiveauEffort;
   readonly mandat: string;
   readonly versionMandat: number | null;
   readonly niveau: NiveauAutonomie;
@@ -271,6 +282,7 @@ function CarteAgent({ agent }: { agent: AgentAffiche }) {
           <Limites agent={agent} enCours={enCours} executer={executer} />
           <Perimetre agent={agent} enCours={enCours} executer={executer} />
           <Suspension agent={agent} suspendu={suspendu} enCours={enCours} executer={executer} />
+          <Modele agent={agent} enCours={enCours} executer={executer} />
           <Mandat agent={agent} enCours={enCours} executer={executer} />
         </div>
       ) : null}
@@ -503,6 +515,190 @@ function Suspension({
       <span className="text-xs text-texte-attenue">
         Met l’agent de côté sans perdre ses réglages, contrairement à la désactivation.
       </span>
+    </div>
+  );
+}
+
+/**
+ * Choix du modèle, agent par agent.
+ *
+ * C'est le seul levier de coût qui ne dégrade pas la firme uniformément :
+ * faire tourner cinq analystes sur un petit modèle rapide pendant que le
+ * gestionnaire de portefeuille garde le plus fort divise la facture sans
+ * toucher à la décision finale. Le tarif est affiché à côté de chaque modèle
+ * pour que l'arbitrage se fasse sur des chiffres, pas sur une réputation.
+ *
+ * Les quatre réglages s'enregistrent ensemble, contrairement au reste de cette
+ * console : changer de fournisseur sans changer de modèle produirait un couple
+ * incohérent, refusé côté serveur. Ils se lisent ensemble, ils s'écrivent
+ * ensemble.
+ *
+ * Température et effort sont **disjoints** chez Anthropic — aucun modèle
+ * n'accepte les deux. Le contrôle refusé par le modèle choisi est désactivé et
+ * dit pourquoi, plutôt que de laisser régler une valeur qui ferait échouer
+ * l'appel avec un 400.
+ */
+function Modele({
+  agent,
+  enCours,
+  executer,
+}: {
+  agent: AgentAffiche;
+  enCours: boolean;
+  executer: Executeur;
+}) {
+  const [fournisseur, setFournisseur] = useState<FournisseurLLM>(agent.fournisseur);
+  const [modele, setModele] = useState(agent.modele);
+  const [temperature, setTemperature] = useState(String(agent.temperature));
+  const [tokensMax, setTokensMax] = useState(String(agent.tokensMax));
+  const [effort, setEffort] = useState<NiveauEffort>(agent.effort);
+
+  const proposes = MODELES_PAR_FOURNISSEUR[fournisseur];
+  const temperatureUtile = accepteTemperature(fournisseur, modele);
+  const effortUtile = accepteEffort(fournisseur, modele);
+  const grille = tarif(modele);
+
+  const modifie =
+    fournisseur !== agent.fournisseur ||
+    modele !== agent.modele ||
+    Number(temperature) !== agent.temperature ||
+    Number(tokensMax) !== agent.tokensMax ||
+    effort !== agent.effort;
+
+  function changerFournisseur(valeur: FournisseurLLM) {
+    setFournisseur(valeur);
+    // Un modèle d'un autre fournisseur ne survit pas au changement : le
+    // serveur le refuserait, autant proposer immédiatement un couple valide.
+    setModele(MODELES_PAR_FOURNISSEUR[valeur][0] ?? '');
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs uppercase tracking-[0.14em] text-texte-attenue">Modèle</p>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-texte-attenue">Fournisseur</span>
+          <select
+            value={fournisseur}
+            disabled={enCours}
+            onChange={(evenement) => changerFournisseur(evenement.target.value as FournisseurLLM)}
+            className="chiffre rounded border border-bordure bg-fond px-2 py-1 text-xs outline-none focus:border-accent disabled:opacity-40"
+          >
+            {(Object.keys(MODELES_PAR_FOURNISSEUR) as FournisseurLLM[]).map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-texte-attenue">Modèle</span>
+          <select
+            value={modele}
+            disabled={enCours}
+            onChange={(evenement) => setModele(evenement.target.value)}
+            className="chiffre rounded border border-bordure bg-fond px-2 py-1 text-xs outline-none focus:border-accent disabled:opacity-40"
+          >
+            {proposes.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-texte-attenue">Tokens max</span>
+          <input
+            type="number"
+            min={2000}
+            max={64000}
+            step={1000}
+            value={tokensMax}
+            disabled={enCours}
+            onChange={(evenement) => setTokensMax(evenement.target.value)}
+            className="chiffre w-24 rounded border border-bordure bg-fond px-2 py-1 text-xs outline-none focus:border-accent disabled:opacity-40"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-texte-attenue">Température</span>
+          <input
+            type="number"
+            min={0}
+            max={2}
+            step={0.05}
+            value={temperature}
+            disabled={enCours || !temperatureUtile}
+            title={
+              temperatureUtile
+                ? undefined
+                : `${modele} refuse le paramètre de température : il n’est pas transmis.`
+            }
+            onChange={(evenement) => setTemperature(evenement.target.value)}
+            className="chiffre w-20 rounded border border-bordure bg-fond px-2 py-1 text-xs outline-none focus:border-accent disabled:opacity-30"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-texte-attenue">Effort</span>
+          <select
+            value={effort}
+            disabled={enCours || !effortUtile}
+            title={
+              effortUtile
+                ? undefined
+                : `${modele} refuse le paramètre d’effort : il n’est pas transmis.`
+            }
+            onChange={(evenement) => setEffort(evenement.target.value as NiveauEffort)}
+            className="chiffre rounded border border-bordure bg-fond px-2 py-1 text-xs outline-none focus:border-accent disabled:opacity-30"
+          >
+            {NIVEAUX_EFFORT.map((niveau) => (
+              <option key={niveau} value={niveau}>
+                {niveau}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          disabled={enCours || !modifie}
+          onClick={() =>
+            executer(() =>
+              definirModeleAgent(agent.id, {
+                fournisseur,
+                modele,
+                temperature,
+                tokensMax,
+                effort,
+              }),
+            )
+          }
+          className="rounded bg-accent px-2.5 py-1.5 text-xs font-medium text-fond disabled:opacity-40"
+        >
+          Appliquer
+        </button>
+      </div>
+
+      <p className="text-xs leading-relaxed text-texte-attenue">
+        {grille ? (
+          <>
+            <span className="chiffre">
+              {grille.entree.toFixed(2)} $ / {grille.sortie.toFixed(2)} $
+            </span>{' '}
+            par million de tokens (entrée / sortie).
+          </>
+        ) : (
+          'Tarif inconnu pour ce modèle : la dépense sera comptée comme non chiffrée plutôt que comme nulle.'
+        )}{' '}
+        {temperatureUtile
+          ? null
+          : 'La température est ignorée par ce modèle et n’est pas envoyée. '}
+        {effortUtile ? null : 'L’effort est ignoré par ce modèle et n’est pas envoyé. '}
+      </p>
     </div>
   );
 }

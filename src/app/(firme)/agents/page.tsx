@@ -4,6 +4,7 @@ import { EntetePage } from '@/composants/ui/entete-page';
 import { EtatVide, Panneau } from '@/composants/ui/panneau';
 import { roleHabiliteAExecuter } from '@/lib/agents/niveaux';
 import { DESCRIPTIONS_MODES } from '@/lib/config/modes';
+import { estNiveauEffort } from '@/lib/ia/types';
 import { clientServeur } from '@/lib/supabase/serveur';
 
 import { BancEssai, type AgentOption } from './banc-essai';
@@ -27,7 +28,8 @@ export default async function PageAgents() {
     supabase
       .from('agents')
       .select(
-        `id, cle, nom, role, couleur, actif, fournisseur_llm, modele, ordre_affichage,
+        `id, cle, nom, role, couleur, actif, fournisseur_llm, modele, temperature,
+         tokens_max, effort_llm, ordre_affichage,
          permissions_agents (niveau, peut_ouvrir, peut_fermer, peut_modifier_protections,
            taille_max_lots, risque_max_par_trade_pct, trades_max_par_jour, seuil_validation_lots,
            confiance_minimale, validite_validation_minutes, classes_autorisees, symboles_autorises,
@@ -74,6 +76,13 @@ export default async function PageAgents() {
       actif: agent.actif,
       fournisseur: agent.fournisseur_llm,
       modele: agent.modele,
+      temperature: Number(agent.temperature),
+      tokensMax: agent.tokens_max,
+      // La colonne est du texte contraint par un `check`, pas une énumération
+      // PostgreSQL : le typage généré la voit comme `string`. On revalide donc
+      // ici plutôt que d'affirmer un type que la base ne garantit pas au
+      // compilateur.
+      effort: estNiveauEffort(agent.effort_llm) ? agent.effort_llm : 'medium',
       mandat: mandat?.contenu ?? '',
       versionMandat: mandat?.version ?? null,
       niveau: permission?.niveau ?? 'OBSERVATEUR',
