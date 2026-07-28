@@ -124,13 +124,20 @@ export function Atelier({
         </Panneau>
       </div>
 
-      {/* Tout ce qu'on consulte par intermittence, sous le graphique. Deux
-          colonnes sur tablette, quatre sur grand écran : les panneaux sont
-          courts, les empiler sur une seule colonne obligerait à défiler pour
-          rien. */}
-      <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {panneauAgents}
-
+      {/* Tout ce qu'on consulte par intermittence, sous le graphique.
+          Disposition en colonnes coulantes plutôt qu'en grille. La grille
+          alignait les rangées sur leur panneau le plus haut : « Vos agents »
+          mesure trois fois « Passer un ordre », et la différence devenait un
+          grand vide noir avant la rangée suivante. En colonnes, chaque panneau
+          se pose sous le précédent dès qu'il y a la place — plus de trou.
+          `break-inside-avoid` empêche qu'un panneau soit coupé en deux d'une
+          colonne à l'autre, ce qui serait pire que le vide. */}
+      <div className="columns-1 gap-3 md:columns-2 xl:columns-3 [&>*]:mb-3 [&>*]:break-inside-avoid">
+        {/* L'ordre suit l'usage, pas le hasard : d'abord ce qu'on fait —
+            passer un ordre, surveiller ce qui est ouvert —, puis ce que ça a
+            donné, puis les réglages qu'on touche rarement. Les colonnes
+            coulantes se remplissent dans cet ordre, donc le plus utilisé
+            arrive en haut à gauche. */}
         <Panneau titre="Passer un ordre">
           <BilletOrdre
             symbole={symbole}
@@ -140,7 +147,7 @@ export function Atelier({
           />
         </Panneau>
 
-        <Panneau titre="Positions ouvertes">
+        <Panneau titre="Positions ouvertes" corpsDefilant className="max-h-[22rem]">
           <PositionsOuvertes
             positions={positions}
             dernierPrix={dernierPrix}
@@ -149,15 +156,17 @@ export function Atelier({
           />
         </Panneau>
 
-        <Panneau titre="Ordres en attente">
+        <Panneau titre="Ordres en attente" corpsDefilant className="max-h-[22rem]">
           <OrdresEnAttente ordres={ordres} intervalle={intervalle} />
         </Panneau>
 
-        <Panneau titre="Placements de la firme">
+        {panneauFirme}
+
+        <Panneau titre="Placements de la firme" corpsDefilant className="max-h-[22rem]">
           <Placements placements={placements} />
         </Panneau>
 
-        {panneauFirme}
+        {panneauAgents}
 
         <Panneau titre="Rejeu historique et vitesse">
           <CommandeRejeu
