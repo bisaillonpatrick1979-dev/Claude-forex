@@ -25,9 +25,10 @@ import {
   type Serie,
 } from '@/lib/marche/indicateurs';
 import { POINTS_REQUIS, type Annotation, type Outil, type PointGraphique } from '@/lib/graphique/annotations';
-import type { Chandelier } from '@/lib/marche/types';
+import type { Chandelier, Intervalle } from '@/lib/marche/types';
 
 import { PrimitiveAnnotations } from './primitive-annotations';
+import { PrimitiveSeances } from './primitive-seances';
 import type { IndicateursActifs, MarqueurDecision } from './types-graphique';
 
 /**
@@ -78,6 +79,10 @@ interface Proprietes {
   readonly couleurOutil?: string;
   /** Appelé quand tous les points requis par l'outil ont été posés. */
   readonly surTracer?: (points: readonly PointGraphique[]) => void;
+  /** Intervalle affiché : au-delà de H4, les bandes de séance ne veulent plus
+   *  rien dire et ne sont pas peintes. */
+  readonly intervalle: Intervalle;
+  readonly bandesSeancesVisibles?: boolean;
 }
 
 interface InfoSurvol {
@@ -95,6 +100,8 @@ export function GraphiqueChandeliers({
   outil = null,
   couleurOutil = '#4c9aff',
   surTracer,
+  intervalle,
+  bandesSeancesVisibles = true,
 }: Proprietes) {
   const conteneurRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -104,6 +111,15 @@ export function GraphiqueChandeliers({
   const rsiRef = useRef<ISeriesApi<'Line'> | null>(null);
   const marqueursRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const primitiveRef = useRef<PrimitiveAnnotations | null>(null);
+  const seancesRef = useRef<PrimitiveSeances | null>(null);
+
+  useEffect(() => {
+    seancesRef.current?.definirIntervalle(intervalle);
+  }, [intervalle]);
+
+  useEffect(() => {
+    seancesRef.current?.definirVisible(bandesSeancesVisibles);
+  }, [bandesSeancesVisibles]);
 
   // Points déjà posés pour le tracé en cours. En `ref` et non en état : le
   // gestionnaire de clic est enregistré une seule fois auprès du graphique, et
@@ -191,6 +207,12 @@ export function GraphiqueChandeliers({
     const primitive = new PrimitiveAnnotations();
     bougiesRef.current.attachPrimitive(primitive);
     primitiveRef.current = primitive;
+
+    // Attachée après les annotations mais peinte sous les chandeliers : c'est
+    // le `zOrder` de la primitive qui décide, pas l'ordre d'attachement.
+    const seances = new PrimitiveSeances();
+    bougiesRef.current.attachPrimitive(seances);
+    seancesRef.current = seances;
 
     // Légende OHLC suivant le curseur : indispensable pour lire des valeurs
     // exactes plutôt que de les estimer à l'œil.

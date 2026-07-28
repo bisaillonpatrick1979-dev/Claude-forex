@@ -1030,11 +1030,37 @@ séance » sur deux trades serait une conclusion tirée du bruit — exactement 
 que la validation statistique du backtest existe pour empêcher ailleurs. Il
 serait incohérent d'être rigoureux au backtest et complaisant au journal.
 
+### Les bandes sur le graphique
+
+Zones verticales colorées sous les chandeliers, comme les indicateurs de séance
+de MT4/MT5 et de TradingView. Trois décisions les gouvernent :
+
+**`zOrder: 'bottom'` n'est pas cosmétique.** Peintes au-dessus, même à 7 %
+d'opacité, les bandes laveraient la couleur des corps de bougie — et cette
+couleur est une donnée, pas une décoration.
+
+**Rien n'est peint au-delà de H4.** À cette échelle une bougie couvre plusieurs
+séances : la bande ne désignerait plus rien. Le bouton se désactive et dit
+pourquoi, plutôt que de disparaître sans explication.
+
+**Rien n'est peint le week-end.** Une bande « Sydney » sur un samedi laisserait
+croire que le marché cotait. Les portions de week-end sont découpées de la
+plage, quitte à couper une séance en deux morceaux.
+
+Les bornes se recalculent à chaque rendu plutôt que d'être mémorisées : la
+plage visible change à chaque zoom et à chaque défilement, et une liste en
+cache serait fausse une image sur deux. Le calcul est une poignée de
+comparaisons d'entiers — le refaire coûte moins cher que de l'invalider
+correctement.
+
+Les couleurs sortent volontairement de la palette verte/rouge, réservée au
+P&L : une bande de fond verte se lirait comme un gain.
+
 ### Où la séance apparaît
 
-Au survol d'un marqueur du graphique (entrée, sortie, refus), sur chaque
-position ouverte, dans le bandeau vivant en haut de la salle des marchés, et en
-tableau dans le journal de performance.
+En bandes verticales sous les chandeliers, au survol d'un marqueur du graphique
+(entrée, sortie, refus), sur chaque position ouverte, dans le bandeau vivant en
+haut de la salle des marchés, et en tableau dans le journal de performance.
 
 ---
 

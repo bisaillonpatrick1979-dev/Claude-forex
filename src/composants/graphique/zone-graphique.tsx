@@ -3,6 +3,11 @@
 import dynamique from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import {
+  INTERVALLE_MAXIMUM_BANDES,
+  bandesPertinentes,
+} from '@/lib/graphique/bandes-seances';
+
 import { creerAnnotation, listerAnnotations } from '@/app/actions/annotations';
 import {
   annotationVisible,
@@ -79,6 +84,9 @@ export function ZoneGraphique({
   const [indicateurs, setIndicateurs] = useState<IndicateursActifs>(INDICATEURS_DEFAUT);
   const [annotations, setAnnotations] = useState<readonly Annotation[]>([]);
   const [outil, setOutil] = useState<Outil | null>(null);
+  // Visibles par défaut : c'est le réglage des plateformes professionnelles,
+  // et le repère sert surtout à qui ne pense pas encore à le chercher.
+  const [bandesSeances, setBandesSeances] = useState(true);
   const [couleur, setCouleur] = useState(COULEUR_DEFAUT);
 
   const symbole = symboleControle ?? symboleInterne;
@@ -191,6 +199,31 @@ export function ZoneGraphique({
               {libelle}
             </button>
           ))}
+
+          {/* Les bandes de séance : peintes sous les chandeliers, coupées au
+              week-end, et retirées au-delà de H4 où une bougie couvre
+              plusieurs séances et où le repère ne voudrait plus rien dire. */}
+          <button
+            type="button"
+            aria-pressed={bandesSeances}
+            title={
+              bandesPertinentes(intervalle)
+                ? 'Zones Tokyo, Londres et New York sous les chandeliers'
+                : `Les bandes de séance ne s’affichent pas au-delà de ${INTERVALLE_MAXIMUM_BANDES} : une bougie y couvre plusieurs séances.`
+            }
+            disabled={!bandesPertinentes(intervalle)}
+            onClick={() => setBandesSeances((precedent) => !precedent)}
+            className={[
+              'chiffre rounded border px-1.5 py-0.5 text-[0.72rem] uppercase tracking-wider transition-colors',
+              !bandesPertinentes(intervalle)
+                ? 'cursor-not-allowed border-bordure text-texte-attenue/40'
+                : bandesSeances
+                  ? 'border-bordure-vive text-texte'
+                  : 'border-bordure text-texte-attenue hover:text-texte',
+            ].join(' ')}
+          >
+            Séances
+          </button>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -252,6 +285,8 @@ export function ZoneGraphique({
             outil={outil}
             couleurOutil={couleur}
             surTracer={tracer}
+            intervalle={intervalle}
+            bandesSeancesVisibles={bandesSeances}
           />
         ) : (
           <div className="flex h-full items-center justify-center px-4 text-center text-xs text-texte-attenue">
