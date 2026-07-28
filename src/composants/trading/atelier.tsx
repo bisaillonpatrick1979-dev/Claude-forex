@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { FilSpecialistes, type AgentAffiche } from '@/composants/agents/fil-specialistes';
 import { ZoneGraphique, type SymboleOption } from '@/composants/graphique/zone-graphique';
 import { construireMarqueurs, type SourcesMarqueurs } from '@/lib/orchestration/marqueurs';
+import { HorlogeSeances } from '@/composants/marche/horloge-seances';
 import { Panneau } from '@/composants/ui/panneau';
 import type { Intervalle } from '@/lib/marche/types';
 
@@ -26,6 +27,7 @@ import {
  * sur le Nasdaq sans que rien ne le signale.
  */
 export function Atelier({
+  instantInitial,
   symboles,
   positions,
   ordres,
@@ -39,6 +41,9 @@ export function Atelier({
   rejeu,
   capitalInitial,
 }: {
+  /** Instant du rendu serveur, pour que l'horloge ne diverge pas à
+   *  l'hydratation. */
+  instantInitial: number;
   symboles: readonly SymboleOption[];
   positions: readonly PositionAffichee[];
   ordres: readonly OrdreAffiche[];
@@ -84,6 +89,11 @@ export function Atelier({
     // *pendant* qu'on regarde le prix, et il a besoin de hauteur, pas de
     // largeur. Tous les autres descendent.
     <div className="flex flex-col gap-3">
+      {/* Bandeau des séances, en haut comme sur toutes les plateformes
+          professionnelles : avant de regarder un prix, on veut savoir quel
+          marché est ouvert et combien de temps il le reste. */}
+      <HorlogeSeances instantInitial={instantInitial} />
+
       {/* `items-start` : chaque panneau garde la hauteur qu'il s'est donnée.
           Sans lui, une grille étire ses éléments sur le plus haut, et un
           contenu qui dépasse sa boîte se retrouve à recouvrir le voisin. */}

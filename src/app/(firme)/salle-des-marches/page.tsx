@@ -45,7 +45,7 @@ export default async function PageSalleDesMarches() {
       listerSymboles(supabase),
       supabase
         .from('positions')
-        .select('id, sens, quantite, prix_entree, stop_loss, take_profit, symboles(code, decimales, taille_contrat)')
+        .select('id, sens, quantite, prix_entree, stop_loss, take_profit, ouvert_le, symboles(code, decimales, taille_contrat)')
         .eq('profil_id', profilId)
         .eq('statut', 'OUVERTE')
         .order('ouvert_le', { ascending: false }),
@@ -147,6 +147,7 @@ export default async function PageSalleDesMarches() {
     symbole: ligne.symboles?.code ?? '—',
     sens: ligne.sens,
     quantite: Number(ligne.quantite),
+    ouvertLe: Math.floor(new Date(ligne.ouvert_le).getTime() / 1000),
     prixEntree: Number(ligne.prix_entree),
     stopLoss: ligne.stop_loss === null ? null : Number(ligne.stop_loss),
     takeProfit: ligne.take_profit === null ? null : Number(ligne.take_profit),
@@ -239,6 +240,7 @@ export default async function PageSalleDesMarches() {
 
   return (
     <Atelier
+      instantInitial={Math.floor(Date.now() / 1000)}
       symboles={symboles}
       positions={positionsAffichees}
       ordres={ordresAffiches}

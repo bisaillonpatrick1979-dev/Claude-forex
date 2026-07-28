@@ -154,6 +154,104 @@ export function nomSeance(code: CodeSeance): string {
   return SEANCES.find((seance) => seance.code === code)?.nom ?? code;
 }
 
+/**
+ * Ordre de liquidité, du plus porteur au plus calme.
+ *
+ * Sert à désigner *une* séance quand plusieurs se chevauchent. Ce n'est pas un
+ * classement de qualité : c'est l'ordre dans lequel un trader nomme l'heure à
+ * laquelle il a agi. À 14 h UTC, Londres et New York sont ouvertes toutes les
+ * deux, et personne ne dit « j'ai pris ça sur Tokyo ».
+ */
+const ORDRE_LIQUIDITE: readonly CodeSeance[] = ['LONDRES', 'NEW_YORK', 'TOKYO', 'SYDNEY'];
+
+/** Chevauchements qui portent un nom dans le métier, et méritent d'être dits. */
+const CHEVAUCHEMENTS: readonly { readonly paire: readonly [CodeSeance, CodeSeance]; readonly nom: string }[] =
+  [
+    { paire: ['LONDRES', 'NEW_YORK'], nom: 'Londres × New York' },
+    { paire: ['TOKYO', 'LONDRES'], nom: 'Tokyo × Londres' },
+    { paire: ['SYDNEY', 'TOKYO'], nom: 'Sydney × Tokyo' },
+  ];
+
+export interface EtatSeances {
+  readonly ouvertes: readonly CodeSeance[];
+  /** Séance à laquelle rattacher une décision prise à cet instant. */
+  readonly dominante: CodeSeance | null;
+  /** Nom du chevauchement en cours, s'il en porte un. */
+  readonly chevauchement: string | null;
+  readonly weekEnd: boolean;
+  /** Prochain instant où une séance ouvre ou ferme, en secondes UTC. */
+  readonly prochainChangement: number | null;
+}
+
+/**
+ * Photographie des séances à un instant donné.
+ *
+ * Tout se déduit de l'horodatage : rien n'est stocké, donc rien ne peut
+ * diverger. Une décision prise il y a trois mois se rattache à sa séance aussi
+ * sûrement qu'une décision prise à l'instant, et un correctif sur les horaires
+ * corrige l'historique du même coup.
+ */
+export function etatSeances(horodatageSecondes: number): EtatSeances {
+  const weekEnd = weekEndForex(horodatageSecondes);
+  const ouvertes = seancesOuvertes(horodatageSecondes);
+
+  const dominante =
+    ORDRE_LIQUIDITE.find((code) => ouvertes.includes(code)) ?? null;
+
+  const chevauchement =
+    CHEVAUCHEMENTS.find(
+      ({ paire }) => ouvertes.includes(paire[0]) && ouvertes.includes(paire[1]),
+    )?.nom ?? null;
+
+  return {
+    ouvertes,
+    dominante,
+    chevauchement,
+    weekEnd,
+    prochainChangement: prochainChangementSeance(horodatageSecondes),
+  };
+}
+
+/**
+ * Prochain instant où la liste des séances ouvertes change.
+ *
+ * Balayage par pas d'une minute sur une semaine. Une recherche analytique sur
+ * quatre plages qui franchissent minuit, plus le week-end, serait plus rapide
+ * et bien plus facile à casser ; ici le pas de balayage *est* la définition de
+ * la précision affichée, et il se relit sans crayon.
+ */
+export function prochainChangementSeance(horodatageSecondes: number): number | null {
+  const depart = seancesOuvertes(horodatageSecondes);
+  const memeEnsemble = (autre: readonly CodeSeance[]) =>
+    autre.length === depart.length && autre.every((code) => depart.includes(code));
+
+  for (let pas = 1; pas <= 60 * 24 * 7; pas += 1) {
+    const instant = horodatageSecondes + pas * 60;
+    if (!memeEnsemble(seancesOuvertes(instant))) return instant;
+  }
+  return null;
+}
+
+/**
+ * Rattache un horodatage à sa séance, pour l'afficher à côté d'un trade.
+ *
+ * Rend `null` hors marché plutôt qu'une séance par défaut : un ordre passé le
+ * samedi n'appartient à aucune séance, et prétendre le contraire serait une
+ * donnée inventée.
+ */
+export function seanceDe(horodatageSecondes: number): CodeSeance | null {
+  return etatSeances(horodatageSecondes).dominante;
+}
+
+/** Libellé court pour une pastille : « Londres », « Londres × New York ». */
+export function libelleSeance(horodatageSecondes: number): string {
+  const etat = etatSeances(horodatageSecondes);
+  if (etat.weekEnd) return 'Hors marché';
+  if (etat.chevauchement) return etat.chevauchement;
+  if (etat.dominante) return nomSeance(etat.dominante);
+  return 'Aucune séance';
+}
+
 /** Prochaine ouverture d'une des séances choisies, pour afficher l'attente. */
 export function prochaineOuverture(
   seancesChoisies: readonly CodeSeance[],

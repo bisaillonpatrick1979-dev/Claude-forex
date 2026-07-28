@@ -985,6 +985,59 @@ partiel.
 
 ---
 
+## Les séances de marché, partout où une décision se lit
+
+Recherche faite sur ce que les plateformes professionnelles affichent
+(indicateurs de séance MT4/MT5 et TradingView, journaux de trading type
+TradeZella / TradesViz / Lune). Deux fonctions reviennent systématiquement, et
+manquaient toutes les deux :
+
+1. un **bandeau de séances** en haut de l'écran — quelles places sont ouvertes,
+   et combien de temps il reste avant que ça change ;
+2. une **ventilation des résultats par séance** — le même système ne rend pas
+   la même chose à 3 h et à 14 h, et un rendement global masque exactement cela.
+
+### La séance se déduit, elle ne se stocke pas
+
+Aucune colonne, aucune migration. `etatSeances(horodatage)` est une fonction
+pure : une position ouverte il y a trois mois se rattache à sa séance aussi
+sûrement qu'une position ouverte à l'instant, et corriger les horaires un jour
+corrigera tout l'historique du même coup. Une colonne aurait figé l'erreur.
+
+### Quelle séance nommer quand plusieurs sont ouvertes
+
+À 14 h UTC, Londres et New York cotent toutes les deux — et personne ne dit
+« j'ai pris ça sur Tokyo ». La séance affichée est donc la plus liquide des
+ouvertes (Londres > New York > Tokyo > Sydney), et le **chevauchement** est
+nommé quand il en existe un : « Londres × New York » est l'information la plus
+actionnable de la journée, c'est là que les spreads se resserrent.
+
+Hors marché, la fonction rend `null` plutôt qu'une séance par défaut. Un ordre
+passé le samedi n'appartient à aucune séance ; prétendre le contraire serait
+une donnée inventée.
+
+### Ce que le compte à rebours mesure
+
+Pas l'heure, mais le **prochain changement de régime** — ouverture *ou*
+fermeture, puisque les deux modifient la liquidité. « Londres ferme dans 40
+min » est ce qu'un trader lit ; « il est 16 h 20 » ne lui apprend rien.
+
+### Le seuil avant de désigner une séance
+
+`seancesRemarquables` refuse de nommer une meilleure et une pire séance sous
+cinq trades par séance, sur au moins deux séances. Désigner « la meilleure
+séance » sur deux trades serait une conclusion tirée du bruit — exactement ce
+que la validation statistique du backtest existe pour empêcher ailleurs. Il
+serait incohérent d'être rigoureux au backtest et complaisant au journal.
+
+### Où la séance apparaît
+
+Au survol d'un marqueur du graphique (entrée, sortie, refus), sur chaque
+position ouverte, dans le bandeau vivant en haut de la salle des marchés, et en
+tableau dans le journal de performance.
+
+---
+
 ## Le fil s'écrit maintenant token par token
 
 Le cahier des charges (§6) demandait un fil où le message « arrive en streaming

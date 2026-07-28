@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 
 import { avancerTousLesInstruments, fermerPositionManuelle } from '@/app/actions/trading';
 import { EtatVide } from '@/composants/ui/panneau';
+import { seanceDuTrade } from '@/lib/backtest/par-seance';
 import { couleurPnl, formaterMonnaie } from '@/lib/format';
 import type { Intervalle } from '@/lib/marche/types';
 
@@ -17,6 +18,9 @@ export interface PositionAffichee {
   readonly takeProfit: number | null;
   readonly tailleContrat: number;
   readonly decimales: number;
+  /** Ouverture en secondes UTC. Sert à nommer la séance dans laquelle la
+   *  position a été prise — déduite, jamais stockée. */
+  readonly ouvertLe: number;
 }
 
 export interface OrdreAffiche {
@@ -79,6 +83,15 @@ export function PositionsOuvertes({
             </div>
 
             <div className="chiffre mt-0.5 flex flex-wrap gap-x-2 text-[0.72rem] text-texte-attenue">
+              {/* La séance d'entrée dit dans quel régime de liquidité la
+                  décision a été prise — l'information que réclame tout
+                  journal de trading professionnel. */}
+              <span
+                className="rounded border border-bordure px-1 text-texte"
+                title="Séance de marché au moment de l’entrée"
+              >
+                {seanceDuTrade(position.ouvertLe)}
+              </span>
               <span>entrée {position.prixEntree.toFixed(position.decimales)}</span>
               <span>
                 stop {position.stopLoss === null ? '—' : position.stopLoss.toFixed(position.decimales)}

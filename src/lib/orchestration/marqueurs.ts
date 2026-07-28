@@ -1,4 +1,5 @@
 import { debutBougie } from '@/lib/marche/intervalles';
+import { libelleSeance } from '@/lib/marche/seances-mondiales';
 import type { Intervalle } from '@/lib/marche/types';
 
 /**
@@ -131,6 +132,7 @@ export function construireMarqueurs(
       raisonnement: tronquer(
         [
           `${entree.origine === 'AGENT' ? 'Décision des agents' : 'Ordre manuel'} — ${achat ? 'achat' : 'vente'} de ${entree.quantite} lot(s) à ${entree.prixEntree}.`,
+          `Séance : ${libelleSeance(entree.ouvertLe)}.`,
           entree.raisonnement ?? '',
         ]
           .filter(Boolean)
@@ -156,7 +158,7 @@ export function construireMarqueurs(
       // quel, pertes comprises.
       etiquette: sortie.pnl === null ? 'Sortie' : signe(sortie.pnl),
       raisonnement: tronquer(
-        `Position fermée à ${sortie.prixSortie} (${motif}). Résultat : ${sortie.pnl === null ? 'donnée manquante' : signe(sortie.pnl)}.`,
+        `Position fermée à ${sortie.prixSortie} (${motif}). Résultat : ${sortie.pnl === null ? 'donnée manquante' : signe(sortie.pnl)}.\nSéance : ${libelleSeance(sortie.fermeLe)}.`,
       ),
     });
   }
@@ -172,7 +174,7 @@ export function construireMarqueurs(
       couleur: COULEUR_REFUS,
       etiquette: refuse.sens === 'ACHAT' ? '✕ achat' : '✕ vente',
       raisonnement: tronquer(
-        `Proposition non exécutée — ${LIBELLES_REFUS[refuse.statut] ?? refuse.statut}.\n${refuse.sens} ${refuse.quantite} lot(s).\n${refuse.raison}`,
+        `Proposition non exécutée — ${LIBELLES_REFUS[refuse.statut] ?? refuse.statut}.\n${refuse.sens} ${refuse.quantite} lot(s).\nSéance : ${libelleSeance(refuse.horodatage)}.\n${refuse.raison}`,
       ),
     });
   }
