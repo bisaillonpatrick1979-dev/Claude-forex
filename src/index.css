@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+    /* Empêche le zoom au double-tap sans interdire le pincement : sur mobile,
+       un double-tap accidentel sur un bouton ne doit pas recadrer l'écran. */
+    touch-action: manipulation;
+  }
+
+  body {
+    @apply bg-fond text-texte antialiased;
+    /* Pas de rebond élastique : l'application occupe l'écran, pas une page. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Chiffres tabulaires partout : sans ça, les colonnes de prix dansent à
+     chaque mise à jour et deviennent illisibles en un coup d'œil. */
+  .chiffre {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+    @apply font-mono;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent;
+  }
+}
+
+@layer utilities {
+  .safe-bas {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-haut {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
