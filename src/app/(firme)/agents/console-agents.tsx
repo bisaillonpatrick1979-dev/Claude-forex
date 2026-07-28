@@ -9,6 +9,7 @@ import {
   definirPerimetre,
   enregistrerLimites,
   enregistrerMandat,
+  reactiverTousLesAgents,
   reprendreAgent,
   suspendreAgent,
   toutMettreEnValidation,
@@ -76,6 +77,7 @@ function nombreOuNull(valeur: string): number | null {
 
 export function ConsoleAgents({ agents }: { agents: readonly AgentAffiche[] }) {
   const autonomes = agents.filter((agent) => agent.niveau === 'AUTONOME' && agent.actif);
+  const inactifs = agents.filter((agent) => !agent.actif);
   const [repriseMessage, setRepriseMessage] = useState<string | null>(null);
   const [reprise, demarrerReprise] = useTransition();
 
@@ -120,6 +122,37 @@ export function ConsoleAgents({ agents }: { agents: readonly AgentAffiche[] }) {
           <p className="mt-2 text-xs text-texte-attenue">{repriseMessage}</p>
         ) : null}
       </Panneau>
+
+      {inactifs.length > 0 ? (
+        <Panneau titre="Firme au repos">
+          <p className="text-xs leading-relaxed text-texte-attenue">
+            <span className="text-alerte">
+              {inactifs.length} agent{inactifs.length > 1 ? 's' : ''} inacti
+              {inactifs.length > 1 ? 'fs' : 'f'}
+            </span>{' '}
+            — la firme ne peut ni délibérer ni surveiller. C’est l’état que laisse un kill switch :
+            le dégel rend le portefeuille, il ne remet pas les agents en service, et rien ne
+            redémarre tout seul après un arrêt d’urgence.
+          </p>
+          <button
+            type="button"
+            disabled={reprise}
+            onClick={() =>
+              demarrerReprise(async () => {
+                const resultat = await reactiverTousLesAgents();
+                setRepriseMessage(resultat.message);
+              })
+            }
+            className="mt-2 rounded border border-accent bg-accent/10 px-3 py-1.5 text-sm text-texte disabled:border-bordure disabled:bg-transparent disabled:text-texte-attenue"
+          >
+            Remettre les {inactifs.length} agent{inactifs.length > 1 ? 's' : ''} en service
+          </button>
+          <p className="mt-2 text-[0.7rem] leading-relaxed text-texte-attenue">
+            Les permissions et les suspensions individuelles ne sont pas touchées : un agent
+            suspendu le reste.
+          </p>
+        </Panneau>
+      ) : null}
 
       {agents.map((agent) => (
         <CarteAgent key={agent.id} agent={agent} />

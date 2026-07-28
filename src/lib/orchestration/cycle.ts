@@ -211,7 +211,16 @@ export async function lancerCycle(options: OptionsCycle): Promise<ResultatCycle>
 
   if (!profil) return echec('Profil introuvable.');
   if (!parametres) return echec('Paramètres de risque introuvables.');
-  if (agents.length === 0) return echec('Aucun agent actif : le kill switch est peut-être enclenché.');
+  if (agents.length === 0) {
+    // Le message précédent désignait « peut-être » le kill switch, sans dire
+    // quoi faire — et un kill switch déjà levé laisse justement les agents
+    // inactifs. On nomme la cause la plus probable et l'endroit où la corriger.
+    return echec(
+      'Aucun agent en service : la firme ne peut pas délibérer. ' +
+        'C’est l’état que laisse un kill switch — le dégel rend le portefeuille, ' +
+        'pas les agents. Les remettre en service dans Agents → « Firme au repos ».',
+    );
+  }
 
   const mode = profil.mode_operation;
   const horizon = profil.horizon_trading;

@@ -338,6 +338,45 @@ export async function reprendreAgent(agentId: string): Promise<ResultatAgent> {
   return { ok: true, message: 'Suspension levée.' };
 }
 
+/**
+ * Remise en service de toute la firme après un arrêt d'urgence.
+ *
+ * Le kill switch désactive les douze agents ; le dégel, lui, ne rend que le
+ * portefeuille — c'est délibéré, rien ne doit redémarrer tout seul après un
+ * arrêt d'urgence. Mais il manquait le geste inverse : une fois le dégel fait,
+ * la firme restait muette, et le seul message affiché — « aucun agent actif, le
+ * kill switch est peut-être enclenché » — désignait un kill switch déjà levé
+ * sans dire quoi faire.
+ *
+ * Réactiver douze agents un par un est une corvée qui invite à croire que
+ * quelque chose est cassé. Un geste, explicite, journalisé.
+ */
+export async function reactiverTousLesAgents(): Promise<ResultatAgent> {
+  const ctx = await contexte();
+  if (!ctx) return { ok: false, message: 'Session expirée.' };
+
+  const { data, error } = await ctx.supabase
+    .from('agents')
+    .update({ actif: true })
+    .eq('profil_id', ctx.profilId)
+    .eq('actif', false)
+    .select('id');
+
+  if (error) return { ok: false, message: messageErreur(error) };
+
+  const nombre = data?.length ?? 0;
+  revalidatePath('/agents');
+  revalidatePath('/salle-des-marches');
+
+  return {
+    ok: true,
+    message:
+      nombre === 0
+        ? 'Tous les agents étaient déjà actifs.'
+        : `${nombre} agent(s) réactivé(s). Leurs permissions et leurs suspensions individuelles sont inchangées.`,
+  };
+}
+
 export async function basculerAgent(agentId: string, actif: boolean): Promise<ResultatAgent> {
   const ctx = await contexte();
   if (!ctx) return { ok: false, message: 'Session expirée.' };
