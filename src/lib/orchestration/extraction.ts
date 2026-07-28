@@ -85,7 +85,7 @@ export type VueMarche = z.infer<typeof schemaVueMarche>;
 export const schemaProposition = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('ABSTENTION'),
-    raisonnement: z.string().min(1).max(4000),
+    raisonnement: texteBorne(4000).refine((texte) => texte.length > 0, 'Raisonnement vide.'),
   }),
   z.object({
     action: z.literal('ORDRE'),
@@ -96,7 +96,9 @@ export const schemaProposition = z.discriminatedUnion('action', [
     stop_loss: z.coerce.number().positive(),
     take_profit: z.coerce.number().positive().nullable().optional(),
     validite_minutes: z.coerce.number().int().min(1).max(10_080).nullable().optional(),
-    raisonnement: z.string().min(1).max(4000),
+    // Seule la prose est tronquée. Sens, stop et quantité restent stricts :
+    // un ordre mal formé ne doit pas partir, jamais être « rattrapé ».
+    raisonnement: texteBorne(4000).refine((texte) => texte.length > 0, 'Raisonnement vide.'),
   }),
 ]);
 
@@ -104,12 +106,12 @@ export type Proposition = z.infer<typeof schemaProposition>;
 
 export const schemaDecisionPm = z.object({
   decision: z.enum(['APPROUVE', 'REFUSE']),
-  justification: z.string().min(1).max(4000),
+  justification: texteBorne(4000).refine((texte) => texte.length > 0, 'Justification vide.'),
 });
 
 export const schemaLecon = z.object({
-  titre: z.string().min(1).max(200),
-  contenu: z.string().min(1).max(4000),
+  titre: texteBorne(200).refine((texte) => texte.length > 0, 'Titre vide.'),
+  contenu: texteBorne(4000).refine((texte) => texte.length > 0, 'Contenu vide.'),
   etiquettes: z.array(z.string().max(40)).max(8).default([]),
 });
 

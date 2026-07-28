@@ -292,3 +292,84 @@ describe('adaptateur de simulation', () => {
     expect(analyser(schemaVueMarche, reponse.contenu).ok).toBe(true);
   });
 });
+
+/**
+ * Ce qui est structurel est rejeté quand il est faux ; ce qui est descriptif est
+ * tronqué. Un sens, un stop ou une quantité doivent être exacts ou l'ordre ne
+ * part pas. Un libellé de deux caractères trop long ne doit jamais pouvoir
+ * annuler l'analyse qu'il accompagne — c'est ce qui affichait « vue de marché
+ * illisible » là où le modèle avait rendu quatre cents mots corrects.
+ */
+describe('champs descriptifs : troncature plutôt que rejet', () => {
+  const vue = (surcharge: Record<string, unknown>) => ({
+    direction: 'NEUTRE',
+    conviction: 60,
+    resume: 'Rien à signaler.',
+    ...surcharge,
+  });
+
+  it('accepte un horizon plus long que la borne, en le tronquant', () => {
+    // Cas réel : 62 caractères contre un plafond de 60.
+    const horizon = 'scalping (aucune position — attente du prochain signal valide)';
+    expect(horizon.length).toBeGreaterThan(60);
+
+    const analyse = schemaVueMarche.safeParse(vue({ horizon }));
+    expect(analyse.success).toBe(true);
+    expect(analyse.data!.horizon).toHaveLength(60);
+    expect(analyse.data!.horizon).toBe(horizon.slice(0, 60));
+  });
+
+  it('laisse intact un horizon qui tient dans la borne', () => {
+    const analyse = schemaVueMarche.safeParse(vue({ horizon: 'intraday' }));
+    expect(analyse.data!.horizon).toBe('intraday');
+  });
+
+  it('accepte un horizon rendu en nombre', () => {
+    // « horizon : 4 » est une réponse raisonnable à une question ouverte.
+    const analyse = schemaVueMarche.safeParse(vue({ horizon: 4 }));
+    expect(analyse.success).toBe(true);
+    expect(analyse.data!.horizon).toBe('4');
+  });
+
+  it('accepte un horizon rendu en liste', () => {
+    const analyse = schemaVueMarche.safeParse(vue({ horizon: ['M15', 'H1'] }));
+    expect(analyse.data!.horizon).toBe('M15, H1');
+  });
+
+  it('conserve null et l’absence de champ', () => {
+    expect(schemaVueMarche.safeParse(vue({ horizon: null })).data!.horizon).toBeNull();
+    expect(schemaVueMarche.safeParse(vue({})).success).toBe(true);
+  });
+
+  it('refuse quand même un résumé vide', () => {
+    // Tronquer n'est pas tout accepter : un champ obligatoire reste obligatoire.
+    expect(schemaVueMarche.safeParse(vue({ resume: '' })).success).toBe(false);
+  });
+
+  it('ne relâche rien sur les champs structurels d’un ordre', () => {
+    const ordre = {
+      action: 'ORDRE',
+      sens: 'ACHAT',
+      type_ordre: 'MARCHE',
+      quantite: 1,
+      stop_loss: 1.08,
+      raisonnement: 'Motif.',
+    };
+
+    expect(schemaProposition.safeParse(ordre).success).toBe(true);
+    // Un sens inventé, un stop négatif ou une quantité absente restent des
+    // refus : ce sont eux qui engagent de l'argent.
+    expect(schemaProposition.safeParse({ ...ordre, sens: 'PEUT-ÊTRE' }).success).toBe(false);
+    expect(schemaProposition.safeParse({ ...ordre, stop_loss: -1 }).success).toBe(false);
+    expect(schemaProposition.safeParse({ ...ordre, quantite: undefined }).success).toBe(false);
+  });
+
+  it('tronque le raisonnement d’un ordre sans le refuser', () => {
+    const analyse = schemaProposition.safeParse({
+      action: 'ABSTENTION',
+      raisonnement: 'x'.repeat(5000),
+    });
+    expect(analyse.success).toBe(true);
+    expect(analyse.data!.raisonnement).toHaveLength(4000);
+  });
+});
